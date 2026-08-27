@@ -456,6 +456,36 @@ body{
 }
 .year-bar-col.current .year-bar-label{color:var(--amber); font-weight:700;}
 
+.day.special{
+  border-color:var(--amber);
+}
+.holiday-dot{
+  display:inline-block;
+  width:5px;height:5px;
+  border-radius:50%;
+  background:var(--amber);
+  margin-left:3px;
+  vertical-align:middle;
+}
+.extra-input{
+  width:100%;
+  border:1px solid var(--amber);
+  background:rgba(217,142,61,0.08);
+  color:var(--rust);
+  font-family:'IBM Plex Mono', monospace;
+  font-weight:600;
+  font-size:0.6rem;
+  border-radius:4px;
+  padding:1px 3px;
+}
+.extra-input::placeholder{color:var(--amber); opacity:0.8;}
+.calendar-note{
+  font-size:0.72rem;
+  color:var(--ink-soft);
+  margin:-6px 0 14px 2px;
+}
+.calendar-note .holiday-dot{margin-left:0; margin-right:4px;}
+
 .loading{
   text-align:center;
   padding:40px;
@@ -533,11 +563,53 @@ let pay = DEFAULT_PAY;
 let today = new Date();
 let viewY = today.getFullYear();
 let viewM = today.getMonth();
-let monthData = {shifts:{}, net:null};
+let monthData = {shifts:{}, net:null, extra:{}};
 
 const ITALIAN_MONTHS = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
 const ITALIAN_MONTHS_SHORT = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
 const ITALIAN_WEEKDAYS = ['L','M','M','G','V','S','D'];
+
+function getEasterDate(year){
+  const a = year % 19;
+  const b = Math.floor(year/100);
+  const c = year % 100;
+  const d = Math.floor(b/4);
+  const e = b % 4;
+  const f = Math.floor((b+8)/25);
+  const g = Math.floor((b-f+1)/3);
+  const h = (19*a+b-d-g+15)%30;
+  const i = Math.floor(c/4);
+  const k = c%4;
+  const l = (32+2*e+2*i-h-k)%7;
+  const m = Math.floor((a+11*h+22*l)/451);
+  const month = Math.floor((h+l-7*m+114)/31); // 3=marzo, 4=aprile
+  const day = ((h+l-7*m+114)%31)+1;
+  return new Date(year, month-1, day);
+}
+const holidaySetCache = {};
+function getHolidaySet(year){
+  if(holidaySetCache[year]) return holidaySetCache[year];
+  const set = {};
+  const add=(m,d,name)=>{ set[`${m}-${d}`]=name; };
+  add(0,1,'Capodanno');
+  add(0,6,'Epifania');
+  add(3,25,'Festa della Liberazione');
+  add(4,1,'Festa dei Lavoratori');
+  add(5,2,'Festa della Repubblica');
+  add(7,15,'Ferragosto');
+  add(10,1,'Ognissanti');
+  add(11,8,'Immacolata Concezione');
+  add(11,25,'Natale');
+  add(11,26,'Santo Stefano');
+  const easter = getEasterDate(year);
+  const easterMonday = new Date(easter.getFullYear(), easter.getMonth(), easter.getDate()+1);
+  set[`${easterMonday.getMonth()}-${easterMonday.getDate()}`] = 'Pasquetta';
+  holidaySetCache[year] = set;
+  return set;
+}
+function getHolidayName(y,m,d){
+  return getHolidaySet(y)[`${m}-${d}`] || null;
+}
 
 async function loadSettings(){
   try{
@@ -560,22 +632,24 @@ function normalizeMonthData(parsed){
   if(parsed && typeof parsed==='object' && parsed.shifts){
     const shifts = {};
     Object.entries(parsed.shifts).forEach(([d,v])=>{ shifts[d] = Array.isArray(v)?v:[v]; });
-    return {shifts, net: (parsed.net===undefined?null:parsed.net)};
+    const extra = {};
+    if(parsed.extra) Object.entries(parsed.extra).forEach(([d,v])=>{ extra[d] = Number(v); });
+    return {shifts, net: (parsed.net===undefined?null:parsed.net), extra};
   }
   if(parsed && typeof parsed==='object'){
     // formato precedente: {day: typeId}
     const shifts = {};
     Object.entries(parsed).forEach(([d,v])=>{ shifts[d] = Array.isArray(v)?v:[v]; });
-    return {shifts, net:null};
+    return {shifts, net:null, extra:{}};
   }
-  return {shifts:{}, net:null};
+  return {shifts:{}, net:null, extra:{}};
 }
 
 async function loadMonth(y,m){
   try{
     const r = localStorage.getItem(monthKey(y,m));
-    monthData = r ? normalizeMonthData(JSON.parse(r)) : {shifts:{}, net:null};
-  }catch(e){ monthData = {shifts:{}, net:null}; }
+    monthData = r ? normalizeMonthData(JSON.parse(r)) : {shifts:{}, net:null, extra:{}};
+  }catch(e){ monthData = {shifts:{}, net:null, extra:{}}; }
 }
 async function saveMonth(y,m){
   try{
@@ -664,8 +738,10 @@ function computeSummary(){
       byType[id] = (byType[id]||0) + (Number(t.hours)||0);
     });
   });
-  const gross = totalHours * (Number(pay.hourlyRate)||0);
-  return {totalHours, gross, net: monthData.net, byType};
+  const extraTotal = Object.values(monthData.extra||{}).reduce((s,v)=>s+(Number(v)||0),0);
+  const grossBase = totalHours * (Number(pay.hourlyRate)||0);
+  const gross = grossBase + extraTotal;
+  return {totalHours, gross, grossBase, extraTotal, net: monthData.net, byType};
 }
 
 function fmtEuro(n){
@@ -723,11 +799,16 @@ function render(){
       return `<span class="shift-pill" style="background:${hexToSoftBg(t.color)};color:${t.color};" onclick="removeShift(${d},${idx})" title="Rimuovi ${t.label}">${t.code}</span>`;
     }).join('');
     const options = `<option value="">+</option>` + types.map(t=>`<option value="${t.id}">${t.code}</option>`).join('');
+    const isSunday = new Date(viewY, viewM, d).getDay()===0;
+    const holidayName = getHolidayName(viewY, viewM, d);
+    const isSpecial = isSunday || holidayName;
+    const extraVal = monthData.extra[d];
     dayCells += `
-      <div class="day ${isToday(d)?'today':''}">
-        <span class="num">${d}</span>
+      <div class="day ${isToday(d)?'today':''} ${isSpecial?'special':''}">
+        <span class="num">${d}${isSpecial?`<span class="holiday-dot" title="${holidayName||'Domenica'}"></span>`:''}</span>
         <div class="day-shifts">${pills}</div>
         <select class="add-shift" data-day="${d}" onchange="addShift(event)">${options}</select>
+        ${isSpecial?`<input type="number" step="0.01" class="extra-input" data-day="${d}" placeholder="+ €" value="${extraVal!==undefined?extraVal:''}" onchange="onExtraChange(event)">`:''}
       </div>`;
   }
 
@@ -775,6 +856,7 @@ function render(){
     </div>
 
     <div class="legend">${legend}</div>
+    <div class="calendar-note"><span class="holiday-dot"></span>domenica o festivo — tocca "+ €" nel giorno per segnare un guadagno extra</div>
 
     <div class="grid">
       <div class="calendar-card">
@@ -790,8 +872,9 @@ function render(){
             <div class="v">${fmtHours(summary.totalHours)} h</div>
           </div>
           <div class="row gross">
-            <div class="k">Lordo (stimato dalle ore)</div>
+            <div class="k">Lordo (stimato dalle ore${summary.extraTotal?' + extra':''})</div>
             <div class="v">${fmtEuro(summary.gross)}</div>
+            ${summary.extraTotal?`<div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--amber-soft);margin-top:2px;">di cui extra festivi/domenicali: ${fmtEuro(summary.extraTotal)}</div>`:''}
           </div>
           <div class="row net">
             <div class="k">Netto reale del mese</div>
@@ -870,6 +953,15 @@ window.removeShift = async function(day, idx){
     monthData.shifts[day].splice(idx,1);
     if(monthData.shifts[day].length===0) delete monthData.shifts[day];
   }
+  await saveMonth(viewY, viewM);
+  render();
+};
+
+window.onExtraChange = async function(e){
+  const day = Number(e.target.dataset.day);
+  const v = e.target.value;
+  if(!monthData.extra) monthData.extra = {};
+  if(v===''){ delete monthData.extra[day]; } else { monthData.extra[day] = Number(v); }
   await saveMonth(viewY, viewM);
   render();
 };

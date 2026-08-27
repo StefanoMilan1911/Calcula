@@ -351,6 +351,12 @@ body{
   align-items:center;
   margin-bottom:8px;
 }
+.type-block{
+  margin-bottom:12px;
+  padding-bottom:10px;
+  border-bottom:1px dashed var(--line);
+}
+.type-block:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0;}
 .type-row input[type=color]{
   width:28px;height:28px;padding:0;border:none;border-radius:6px;cursor:pointer;background:none;
 }
@@ -425,6 +431,26 @@ body{
   overflow:hidden;
 }
 .bar-fill{height:100%; border-radius:6px;}
+
+.special-row{
+  display:flex;
+  justify-content:space-between;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.82rem;
+  padding:5px 0;
+}
+.special-row-sep{
+  border-top:1px dashed var(--line);
+  margin-top:6px;
+  padding-top:10px;
+}
+.special-group-label{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.66rem;
+  text-transform:uppercase;
+  letter-spacing:0.06em;
+  color:var(--amber);
+}
 
 .year-bars{
   display:flex;
@@ -730,18 +756,49 @@ function typeById(id){ return types.find(t=>t.id===id); }
 function computeSummary(){
   let totalHours = 0;
   let byType = {};
-  Object.values(monthData.shifts).forEach(list=>{
+  let holidayHours = 0, sundayHours = 0;
+  let vacationDays = new Set();
+
+  Object.entries(monthData.shifts).forEach(([day,list])=>{
+    const d = Number(day);
+    const isSunday = new Date(viewY, viewM, d).getDay()===0;
+    const holidayName = getHolidayName(viewY, viewM, d);
+    const isHoliday = !!holidayName;
+
     list.forEach(id=>{
       const t = typeById(id);
       if(!t) return;
-      totalHours += Number(t.hours)||0;
-      byType[id] = (byType[id]||0) + (Number(t.hours)||0);
+      const hrs = Number(t.hours)||0;
+      const isVacationType = t.code && t.code.trim().toUpperCase()==='F';
+      if(isVacationType){
+        vacationDays.add(day);
+        return; // conta solo come giorno di ferie, non ore/soldi
+      }
+      if(isHoliday){
+        holidayHours += hrs;
+        return; // festivo: paga diversa, conteggiato a parte
+      }
+      if(isSunday){
+        sundayHours += hrs;
+        return; // domenicale: paga diversa, conteggiato a parte
+      }
+      totalHours += hrs;
+      byType[id] = (byType[id]||0) + hrs;
     });
   });
-  const extraTotal = Object.values(monthData.extra||{}).reduce((s,v)=>s+(Number(v)||0),0);
-  const grossBase = totalHours * (Number(pay.hourlyRate)||0);
-  const gross = grossBase + extraTotal;
-  return {totalHours, gross, grossBase, extraTotal, net: monthData.net, byType};
+
+  let holidayExtra = 0, sundayExtra = 0;
+  Object.entries(monthData.extra||{}).forEach(([day,v])=>{
+    const d = Number(day);
+    const val = Number(v)||0;
+    const holidayName = getHolidayName(viewY, viewM, d);
+    const isSunday = new Date(viewY, viewM, d).getDay()===0;
+    if(holidayName) holidayExtra += val;
+    else if(isSunday) sundayExtra += val;
+  });
+
+  const gross = totalHours * (Number(pay.hourlyRate)||0);
+  return {totalHours, gross, holidayHours, sundayHours, holidayExtra, sundayExtra, vacationDays: vacationDays.size, net: monthData.net, byType};
 }
 
 function fmtEuro(n){
@@ -872,9 +929,8 @@ function render(){
             <div class="v">${fmtHours(summary.totalHours)} h</div>
           </div>
           <div class="row gross">
-            <div class="k">Lordo (stimato dalle ore${summary.extraTotal?' + extra':''})</div>
+            <div class="k">Lordo (stimato dalle ore ordinarie)</div>
             <div class="v">${fmtEuro(summary.gross)}</div>
-            ${summary.extraTotal?`<div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--amber-soft);margin-top:2px;">di cui extra festivi/domenicali: ${fmtEuro(summary.extraTotal)}</div>`:''}
           </div>
           <div class="row net">
             <div class="k">Netto reale del mese</div>
@@ -887,6 +943,17 @@ function render(){
         <div class="stats-card">
           <h3>Ore per turno</h3>
           ${statBars}
+        </div>
+
+        <div class="stats-card">
+          <h3>Giorni speciali</h3>
+          <div class="special-group-label">Festivi</div>
+          <div class="special-row"><span>Ore</span><span>${fmtHours(summary.holidayHours)} h</span></div>
+          <div class="special-row"><span>Extra</span><span>${fmtEuro(summary.holidayExtra)}</span></div>
+          <div class="special-group-label" style="margin-top:10px;">Domenicali</div>
+          <div class="special-row"><span>Ore</span><span>${fmtHours(summary.sundayHours)} h</span></div>
+          <div class="special-row"><span>Extra</span><span>${fmtEuro(summary.sundayExtra)}</span></div>
+          <div class="special-row special-row-sep"><span>Giorni di ferie</span><span>${summary.vacationDays} gg</span></div>
         </div>
 
         <div class="stats-card">
@@ -909,6 +976,7 @@ function render(){
         </div>
 
         <div class="section-label">Tipi di turno</div>
+        <div class="calendar-note" style="margin:-4px 0 10px;">il tipo con codice "F" viene sempre contato come giorno di ferie</div>
         <div id="typesList">
           ${types.map((t,i)=>`
             <div class="type-row" data-idx="${i}">

@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1C2B39">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%231C2B39'/%3E%3Ctext x='50' y='64' font-size='48' text-anchor='middle' fill='%23D98E3D' font-family='sans-serif'%3E%E2%8F%B1%3C/text%3E%3C/svg%3E">
+<title>Cartellino — Gestione Turni</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+:root{
+  --ink:#1C2B39;
+  --ink-soft:#5C6B72;
+  --paper:#EEF1EF;
+  --paper-raised:#FFFFFF;
+  --line:#CBD3CF;
+  --amber:#D98E3D;
+  --amber-soft:#F3DBB6;
+  --teal:#3E7C6B;
+  --teal-soft:#CFE3DC;
+  --rust:#B85450;
+  --rust-soft:#EBD1CF;
+  --radius:10px;
+  font-size:16px;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'IBM Plex Sans', system-ui, sans-serif;
+  min-height:100vh;
+  padding:24px 16px 64px;
+}
+.app{
+  max-width:980px;
+  margin:0 auto;
+}
+.topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:20px;
+  flex-wrap:wrap;
+}
+.brand{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+}
+.brand h1{
+  font-family:'Space Grotesk', sans-serif;
+  font-size:1.5rem;
+  font-weight:700;
+  margin:0;
+  letter-spacing:-0.01em;
+}
+.brand .tag{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.72rem;
+  color:var(--ink-soft);
+  background:var(--paper-raised);
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:2px 10px;
+}
+.month-nav{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background:var(--paper-raised);
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:6px 8px;
+}
+.month-nav button{
+  width:32px;height:32px;
+  border-radius:50%;
+  border:none;
+  background:transparent;
+  color:var(--ink);
+  font-size:1.1rem;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.month-nav button:hover{background:var(--paper);}
+.month-nav .label{
+  font-family:'Space Grotesk', sans-serif;
+  font-weight:600;
+  min-width:150px;
+  text-align:center;
+  text-transform:capitalize;
+}
+.icon-btn{
+  border:1px solid var(--line);
+  background:var(--paper-raised);
+  border-radius:10px;
+  padding:8px 14px;
+  cursor:pointer;
+  font-family:'IBM Plex Sans', sans-serif;
+  font-weight:500;
+  font-size:0.85rem;
+  color:var(--ink);
+  display:flex;align-items:center;gap:6px;
+}
+.icon-btn:hover{border-color:var(--ink-soft);}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 300px;
+  gap:20px;
+  align-items:start;
+}
+@media (max-width:800px){
+  .grid{grid-template-columns:1fr;}
+}
+
+/* legend */
+.legend{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:14px;
+}
+.chip{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.72rem;
+  font-weight:600;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid transparent;
+  white-space:nowrap;
+}
+
+/* calendar */
+.calendar-card{
+  background:var(--paper-raised);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:16px;
+}
+.weekdays{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:6px;
+  margin-bottom:6px;
+}
+.weekdays span{
+  text-align:center;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.7rem;
+  color:var(--ink-soft);
+  text-transform:uppercase;
+  letter-spacing:0.05em;
+}
+.days{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:6px;
+}
+.day{
+  min-height:78px;
+  border-radius:8px;
+  border:1px solid var(--line);
+  background:var(--paper);
+  padding:5px;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.day.empty{border:none;background:transparent;min-height:0;}
+.day .num{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.72rem;
+  color:var(--ink-soft);
+}
+.day.today .num{color:var(--amber); font-weight:700;}
+.day-shifts{
+  display:flex;
+  flex-wrap:wrap;
+  gap:3px;
+  flex:1;
+}
+.shift-pill{
+  font-family:'IBM Plex Mono', monospace;
+  font-weight:700;
+  font-size:0.6rem;
+  padding:1px 5px;
+  border-radius:4px;
+  cursor:pointer;
+  line-height:1.5;
+  white-space:nowrap;
+}
+.add-shift{
+  width:100%;
+  border:1px dashed var(--line);
+  background:transparent;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.65rem;
+  color:var(--ink-soft);
+  border-radius:5px;
+  padding:1px 2px;
+  cursor:pointer;
+}
+.add-shift:focus{outline:2px solid var(--amber); outline-offset:1px;}
+
+/* summary punch card */
+.punchcard{
+  background:var(--ink);
+  color:var(--paper);
+  border-radius:var(--radius);
+  padding:22px 20px;
+  position:relative;
+  overflow:hidden;
+}
+.punchcard::before{
+  content:"";
+  position:absolute;
+  left:0; top:0; bottom:0;
+  width:14px;
+  background-image:radial-gradient(circle, var(--paper) 2.5px, transparent 2.6px);
+  background-size:14px 16px;
+  background-position:center;
+  opacity:0.5;
+}
+.punchcard h2{
+  font-family:'Space Grotesk', sans-serif;
+  font-size:0.95rem;
+  margin:0 0 16px 18px;
+  text-transform:capitalize;
+  color:var(--paper);
+  opacity:0.85;
+}
+.punchcard .row{
+  margin-left:18px;
+  margin-bottom:14px;
+}
+.punchcard .row .k{
+  font-size:0.68rem;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:#9DAAA6;
+  margin-bottom:2px;
+}
+.punchcard .row .v{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:1.4rem;
+  font-weight:600;
+}
+.punchcard .row.net .v{color:var(--teal-soft);}
+.punchcard .row.gross .v{color:var(--amber-soft);}
+.net-input{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:1.4rem;
+  font-weight:600;
+  color:var(--teal-soft);
+  background:rgba(255,255,255,0.06);
+  border:1px solid #445561;
+  border-radius:6px;
+  padding:4px 8px;
+  width:calc(100% - 18px);
+}
+.net-input::placeholder{color:#6E7E7A; font-size:0.9rem;}
+.punchcard hr{
+  border:none;
+  border-top:1px dashed #445561;
+  margin:14px 18px 14px 18px;
+}
+.breakdown{
+  margin-left:18px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.breakdown .b-row{
+  display:flex;
+  justify-content:space-between;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.78rem;
+  color:#C7D0CD;
+}
+
+/* settings panel */
+.overlay{
+  position:fixed; inset:0;
+  background:rgba(28,43,57,0.45);
+  display:none;
+  align-items:flex-start;
+  justify-content:center;
+  padding:40px 16px;
+  z-index:50;
+  overflow-y:auto;
+}
+.overlay.open{display:flex;}
+.panel{
+  background:var(--paper-raised);
+  border-radius:14px;
+  max-width:560px;
+  width:100%;
+  padding:24px;
+  border:1px solid var(--line);
+}
+.panel h2{
+  font-family:'Space Grotesk', sans-serif;
+  margin-top:0;
+  font-size:1.15rem;
+}
+.panel .close{
+  float:right;
+  border:none;
+  background:transparent;
+  font-size:1.3rem;
+  cursor:pointer;
+  color:var(--ink-soft);
+}
+.section-label{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.72rem;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:var(--ink-soft);
+  margin:20px 0 10px;
+}
+.pay-row{
+  display:flex;
+  gap:12px;
+  margin-bottom:10px;
+}
+.pay-row label{
+  flex:1;
+  font-size:0.8rem;
+  color:var(--ink-soft);
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.pay-row input{
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:8px 10px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.9rem;
+}
+.type-row{
+  display:grid;
+  grid-template-columns:28px 60px 1fr 70px 24px;
+  gap:8px;
+  align-items:center;
+  margin-bottom:8px;
+}
+.type-row input[type=color]{
+  width:28px;height:28px;padding:0;border:none;border-radius:6px;cursor:pointer;background:none;
+}
+.type-row input[type=text],.type-row input[type=number]{
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:6px 8px;
+  font-size:0.85rem;
+  font-family:'IBM Plex Sans', sans-serif;
+  width:100%;
+}
+.type-row .del{
+  border:none;background:transparent;color:var(--rust);cursor:pointer;font-size:1rem;
+}
+.add-type{
+  border:1px dashed var(--line);
+  background:transparent;
+  border-radius:8px;
+  padding:8px;
+  width:100%;
+  cursor:pointer;
+  color:var(--ink-soft);
+  font-size:0.82rem;
+  margin-top:4px;
+}
+.panel-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top:22px;
+}
+.btn-primary{
+  background:var(--ink);
+  color:var(--paper);
+  border:none;
+  border-radius:8px;
+  padding:9px 18px;
+  cursor:pointer;
+  font-weight:500;
+  font-family:'IBM Plex Sans', sans-serif;
+}
+
+/* stats */
+.stats-card{
+  background:var(--paper-raised);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:16px 18px;
+  margin-top:16px;
+}
+.stats-card h3{
+  font-family:'Space Grotesk', sans-serif;
+  font-size:0.85rem;
+  margin:0 0 12px;
+  color:var(--ink-soft);
+  text-transform:uppercase;
+  letter-spacing:0.06em;
+}
+.bar-row{
+  display:grid;
+  grid-template-columns:70px 1fr 46px;
+  align-items:center;
+  gap:10px;
+  margin-bottom:8px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.75rem;
+}
+.bar-track{
+  background:var(--paper);
+  border-radius:6px;
+  height:10px;
+  overflow:hidden;
+}
+.bar-fill{height:100%; border-radius:6px;}
+
+.year-bars{
+  display:flex;
+  align-items:flex-end;
+  gap:4px;
+  height:100px;
+}
+.year-bar-col{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-end;
+  gap:4px;
+  height:100%;
+}
+.year-bar{
+  width:70%;
+  background:var(--teal);
+  border-radius:4px 4px 0 0;
+  min-height:3px;
+  transition:height 0.2s;
+}
+.year-bar-col.current .year-bar{background:var(--amber);}
+.year-bar-label{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.58rem;
+  color:var(--ink-soft);
+}
+.year-bar-col.current .year-bar-label{color:var(--amber); font-weight:700;}
+
+.loading{
+  text-align:center;
+  padding:40px;
+  color:var(--ink-soft);
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.85rem;
+}
+
+.backup-banner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  background:var(--amber-soft);
+  border:1px solid var(--amber);
+  border-radius:10px;
+  padding:10px 14px;
+  margin-bottom:16px;
+  font-size:0.82rem;
+  color:var(--ink);
+}
+.backup-banner-actions{
+  display:flex;
+  gap:8px;
+  flex-shrink:0;
+}
+.backup-banner-actions button{
+  border:none;
+  border-radius:7px;
+  padding:6px 12px;
+  font-size:0.78rem;
+  font-family:'IBM Plex Sans', sans-serif;
+  cursor:pointer;
+  font-weight:500;
+}
+.backup-banner-actions .bb-primary{
+  background:var(--ink);
+  color:var(--paper);
+}
+.backup-banner-actions .bb-ghost{
+  background:transparent;
+  color:var(--ink-soft);
+  border:1px solid var(--ink-soft);
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="loading" id="loading">Caricamento cartellino…</div>
+</div>
+
+<script>
+const STORAGE_TYPES_KEY = 'shift-types';
+const STORAGE_PAY_KEY = 'pay-config';
+const STORAGE_LASTBACKUP_KEY = 'last-backup-at';
+const STORAGE_FIRSTUSE_KEY = 'first-use-at';
+const STORAGE_SNOOZE_KEY = 'backup-snooze-until';
+const BACKUP_REMINDER_DAYS = 30;
+const SNOOZE_DAYS = 7;
+const monthKey = (y,m)=>`month-${y}-${String(m+1).padStart(2,'0')}`;
+
+const DEFAULT_TYPES = [
+  {id:'M', code:'M', label:'Mattino', hours:6, color:'#3E7C6B'},
+  {id:'P', code:'P', label:'Pomeriggio', hours:6, color:'#D98E3D'},
+  {id:'PP', code:'P+', label:'Pomeriggio esteso', hours:8, color:'#B85450'},
+  {id:'N', code:'N', label:'Notte', hours:8, color:'#5C7FA6'},
+  {id:'R', code:'R', label:'Riposo', hours:0, color:'#8B9A96'},
+  {id:'F', code:'F', label:'Ferie', hours:0, color:'#8B9A96'},
+];
+const DEFAULT_PAY = {hourlyRate:10};
+
+let types = DEFAULT_TYPES;
+let pay = DEFAULT_PAY;
+let today = new Date();
+let viewY = today.getFullYear();
+let viewM = today.getMonth();
+let monthData = {shifts:{}, net:null};
+
+const ITALIAN_MONTHS = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+const ITALIAN_MONTHS_SHORT = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+const ITALIAN_WEEKDAYS = ['L','M','M','G','V','S','D'];
+
+async function loadSettings(){
+  try{
+    const t = localStorage.getItem(STORAGE_TYPES_KEY);
+    if(t) types = JSON.parse(t);
+  }catch(e){ /* not set yet, use default */ }
+  try{
+    const p = localStorage.getItem(STORAGE_PAY_KEY);
+    if(p) pay = JSON.parse(p);
+  }catch(e){ /* not set yet, use default */ }
+}
+async function saveSettings(){
+  try{
+    localStorage.setItem(STORAGE_TYPES_KEY, JSON.stringify(types));
+    localStorage.setItem(STORAGE_PAY_KEY, JSON.stringify(pay));
+  }catch(e){ console.error('Errore salvataggio impostazioni', e); }
+}
+
+function normalizeMonthData(parsed){
+  if(parsed && typeof parsed==='object' && parsed.shifts){
+    const shifts = {};
+    Object.entries(parsed.shifts).forEach(([d,v])=>{ shifts[d] = Array.isArray(v)?v:[v]; });
+    return {shifts, net: (parsed.net===undefined?null:parsed.net)};
+  }
+  if(parsed && typeof parsed==='object'){
+    // formato precedente: {day: typeId}
+    const shifts = {};
+    Object.entries(parsed).forEach(([d,v])=>{ shifts[d] = Array.isArray(v)?v:[v]; });
+    return {shifts, net:null};
+  }
+  return {shifts:{}, net:null};
+}
+
+async function loadMonth(y,m){
+  try{
+    const r = localStorage.getItem(monthKey(y,m));
+    monthData = r ? normalizeMonthData(JSON.parse(r)) : {shifts:{}, net:null};
+  }catch(e){ monthData = {shifts:{}, net:null}; }
+}
+async function saveMonth(y,m){
+  try{
+    localStorage.setItem(monthKey(y,m), JSON.stringify(monthData));
+  }catch(e){ console.error('Errore salvataggio turni del mese', e); }
+}
+function getStoredNet(y,m){
+  try{
+    const r = localStorage.getItem(monthKey(y,m));
+    if(!r) return null;
+    const p = normalizeMonthData(JSON.parse(r));
+    return p.net===undefined?null:p.net;
+  }catch(e){ return null; }
+}
+
+function exportBackup(){
+  const data = {};
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    if(k===STORAGE_TYPES_KEY || k===STORAGE_PAY_KEY || k.startsWith('month-')){
+      data[k] = localStorage.getItem(k);
+    }
+  }
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'cartellino-backup.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  localStorage.setItem(STORAGE_LASTBACKUP_KEY, new Date().toISOString());
+  localStorage.removeItem(STORAGE_SNOOZE_KEY);
+  render();
+}
+window.exportBackup = exportBackup;
+
+function daysSince(dateStr){
+  return (Date.now() - new Date(dateStr).getTime()) / (1000*60*60*24);
+}
+function shouldShowBackupReminder(){
+  const snooze = localStorage.getItem(STORAGE_SNOOZE_KEY);
+  if(snooze && new Date(snooze).getTime() > Date.now()) return false;
+  const last = localStorage.getItem(STORAGE_LASTBACKUP_KEY) || localStorage.getItem(STORAGE_FIRSTUSE_KEY);
+  if(!last) return false;
+  return daysSince(last) >= BACKUP_REMINDER_DAYS;
+}
+window.snoozeBackup = function(){
+  const d = new Date(Date.now() + SNOOZE_DAYS*24*60*60*1000);
+  localStorage.setItem(STORAGE_SNOOZE_KEY, d.toISOString());
+  render();
+};
+
+function importBackup(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e){
+    try{
+      const data = JSON.parse(e.target.result);
+      Object.entries(data).forEach(([k,v])=>localStorage.setItem(k,v));
+      await loadSettings();
+      await loadMonth(viewY, viewM);
+      alert('Backup importato con successo.');
+      closeSettings();
+      render();
+    }catch(err){
+      alert('File di backup non valido.');
+    }
+  };
+  reader.readAsText(file);
+}
+window.importBackup = importBackup;
+
+function typeById(id){ return types.find(t=>t.id===id); }
+
+function computeSummary(){
+  let totalHours = 0;
+  let byType = {};
+  Object.values(monthData.shifts).forEach(list=>{
+    list.forEach(id=>{
+      const t = typeById(id);
+      if(!t) return;
+      totalHours += Number(t.hours)||0;
+      byType[id] = (byType[id]||0) + (Number(t.hours)||0);
+    });
+  });
+  const gross = totalHours * (Number(pay.hourlyRate)||0);
+  return {totalHours, gross, net: monthData.net, byType};
+}
+
+function fmtEuro(n){
+  if(n===null || n===undefined || n==='') return '—';
+  return Number(n).toLocaleString('it-IT', {style:'currency', currency:'EUR'});
+}
+function fmtHours(n){
+  return n.toLocaleString('it-IT', {maximumFractionDigits:1});
+}
+
+function daysInMonth(y,m){ return new Date(y, m+1, 0).getDate(); }
+function firstWeekdayMon0(y,m){
+  const d = new Date(y,m,1).getDay(); // 0=Sun
+  return (d+6)%7; // 0=Mon
+}
+
+function hexToSoftBg(hex){
+  const c = hex.replace('#','');
+  const r = parseInt(c.substring(0,2),16), g = parseInt(c.substring(2,4),16), b = parseInt(c.substring(4,6),16);
+  return `rgba(${r},${g},${b},0.18)`;
+}
+
+function renderAnnualNetChart(){
+  const year = viewY;
+  const nets = [];
+  for(let m=0;m<12;m++){ nets.push(getStoredNet(year,m)); }
+  const present = nets.filter(v=>v!==null && v!==undefined);
+  const maxNet = Math.max(1, ...present.map(Number));
+  const bars = nets.map((v,m)=>{
+    const hasVal = v!==null && v!==undefined;
+    const h = hasVal ? Math.max(4, Math.round((Number(v)/maxNet)*100)) : 2;
+    const isCur = m===viewM;
+    return `<div class="year-bar-col ${isCur?'current':''}" title="${ITALIAN_MONTHS_SHORT[m]}: ${hasVal?fmtEuro(v):'non inserito'}">
+      <div class="year-bar" style="height:${h}%;"></div>
+      <span class="year-bar-label">${ITALIAN_MONTHS_SHORT[m]}</span>
+    </div>`;
+  }).join('');
+  return `<div class="year-bars">${bars}</div>`;
+}
+
+function render(){
+  const app = document.getElementById('app');
+  const summary = computeSummary();
+  const nDays = daysInMonth(viewY, viewM);
+  const startOffset = firstWeekdayMon0(viewY, viewM);
+  const isToday = (d)=> d===today.getDate() && viewM===today.getMonth() && viewY===today.getFullYear();
+
+  let dayCells = '';
+  for(let i=0;i<startOffset;i++){ dayCells += `<div class="day empty"></div>`; }
+  for(let d=1; d<=nDays; d++){
+    const assigned = monthData.shifts[d] || [];
+    const pills = assigned.map((id,idx)=>{
+      const t = typeById(id);
+      if(!t) return '';
+      return `<span class="shift-pill" style="background:${hexToSoftBg(t.color)};color:${t.color};" onclick="removeShift(${d},${idx})" title="Rimuovi ${t.label}">${t.code}</span>`;
+    }).join('');
+    const options = `<option value="">+</option>` + types.map(t=>`<option value="${t.id}">${t.code}</option>`).join('');
+    dayCells += `
+      <div class="day ${isToday(d)?'today':''}">
+        <span class="num">${d}</span>
+        <div class="day-shifts">${pills}</div>
+        <select class="add-shift" data-day="${d}" onchange="addShift(event)">${options}</select>
+      </div>`;
+  }
+
+  const legend = types.map(t=>`<span class="chip" style="background:${hexToSoftBg(t.color)};color:${t.color};border-color:${t.color}44;">${t.code} · ${t.hours}h</span>`).join('');
+
+  const breakdown = Object.keys(summary.byType).length
+    ? Object.entries(summary.byType).map(([id,h])=>{
+        const t = typeById(id);
+        return `<div class="b-row"><span>${t?t.label:id}</span><span>${fmtHours(h)} h</span></div>`;
+      }).join('')
+    : `<div class="b-row" style="opacity:0.6;">Nessun turno inserito</div>`;
+
+  const maxTypeHours = Math.max(1, ...Object.values(summary.byType));
+  const statBars = types.map(t=>{
+    const h = summary.byType[t.id] || 0;
+    const pct = Math.round((h/maxTypeHours)*100);
+    return `
+      <div class="bar-row">
+        <span>${t.code}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${h?pct:0}%; background:${t.color};"></div></div>
+        <span style="text-align:right;">${fmtHours(h)}h</span>
+      </div>`;
+  }).join('');
+
+  app.innerHTML = `
+    ${shouldShowBackupReminder() ? `
+    <div class="backup-banner">
+      <span>📦 Non fai un backup da un po'. Meglio salvarne uno.</span>
+      <div class="backup-banner-actions">
+        <button class="bb-primary" onclick="exportBackup()">Backup ora</button>
+        <button class="bb-ghost" onclick="snoozeBackup()">Più tardi</button>
+      </div>
+    </div>` : ''}
+    <div class="topbar">
+      <div class="brand">
+        <h1>Cartellino</h1>
+        <span class="tag">gestione turni</span>
+      </div>
+      <div class="month-nav">
+        <button onclick="changeMonth(-1)" aria-label="Mese precedente">‹</button>
+        <span class="label">${ITALIAN_MONTHS[viewM]} ${viewY}</span>
+        <button onclick="changeMonth(1)" aria-label="Mese successivo">›</button>
+      </div>
+      <button class="icon-btn" onclick="openSettings()">⚙ Impostazioni</button>
+    </div>
+
+    <div class="legend">${legend}</div>
+
+    <div class="grid">
+      <div class="calendar-card">
+        <div class="weekdays">${ITALIAN_WEEKDAYS.map(w=>`<span>${w}</span>`).join('')}</div>
+        <div class="days">${dayCells}</div>
+      </div>
+
+      <div>
+        <div class="punchcard">
+          <h2>${ITALIAN_MONTHS[viewM]} ${viewY}</h2>
+          <div class="row">
+            <div class="k">Ore totali</div>
+            <div class="v">${fmtHours(summary.totalHours)} h</div>
+          </div>
+          <div class="row gross">
+            <div class="k">Lordo (stimato dalle ore)</div>
+            <div class="v">${fmtEuro(summary.gross)}</div>
+          </div>
+          <div class="row net">
+            <div class="k">Netto reale del mese</div>
+            <input type="number" step="0.01" class="net-input" id="netInput" placeholder="Inserisci l'importo" value="${summary.net===null||summary.net===undefined?'':summary.net}" onchange="onNetChange(event)">
+          </div>
+          <hr>
+          <div class="breakdown">${breakdown}</div>
+        </div>
+
+        <div class="stats-card">
+          <h3>Ore per turno</h3>
+          ${statBars}
+        </div>
+
+        <div class="stats-card">
+          <h3>Netto — andamento ${viewY}</h3>
+          ${renderAnnualNetChart()}
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="panel">
+        <button class="close" onclick="closeSettings()">×</button>
+        <h2>Impostazioni</h2>
+
+        <div class="section-label">Paga oraria (per il lordo stimato)</div>
+        <div class="pay-row">
+          <label>Paga oraria lorda (€)
+            <input type="number" step="0.01" id="hourlyRate" value="${pay.hourlyRate}">
+          </label>
+        </div>
+
+        <div class="section-label">Tipi di turno</div>
+        <div id="typesList">
+          ${types.map((t,i)=>`
+            <div class="type-row" data-idx="${i}">
+              <input type="color" value="${t.color}" onchange="updateType(${i},'color',this.value)">
+              <input type="text" value="${t.code}" placeholder="Cod." onchange="updateType(${i},'code',this.value)">
+              <input type="text" value="${t.label}" placeholder="Etichetta" onchange="updateType(${i},'label',this.value)">
+              <input type="number" step="0.5" value="${t.hours}" onchange="updateType(${i},'hours',this.value)">
+              <button class="del" onclick="removeType(${i})" title="Elimina">✕</button>
+            </div>`).join('')}
+        </div>
+        <button class="add-type" onclick="addType()">+ Aggiungi tipo di turno</button>
+
+        <div class="section-label">Backup dati</div>
+        <div class="pay-row">
+          <button class="icon-btn" onclick="exportBackup()" type="button">📤 Esporta backup</button>
+          <label class="icon-btn" style="cursor:pointer; justify-content:center;">
+            📥 Importa backup
+            <input type="file" accept="application/json" style="display:none;" onchange="importBackup(event)">
+          </label>
+        </div>
+
+        <div class="panel-actions">
+          <button class="btn-primary" onclick="applySettings()">Salva</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.addShift = async function(e){
+  const day = Number(e.target.dataset.day);
+  const val = e.target.value;
+  if(!val) return;
+  if(!monthData.shifts[day]) monthData.shifts[day] = [];
+  monthData.shifts[day].push(val);
+  await saveMonth(viewY, viewM);
+  render();
+};
+
+window.removeShift = async function(day, idx){
+  if(monthData.shifts[day]){
+    monthData.shifts[day].splice(idx,1);
+    if(monthData.shifts[day].length===0) delete monthData.shifts[day];
+  }
+  await saveMonth(viewY, viewM);
+  render();
+};
+
+window.onNetChange = async function(e){
+  const v = e.target.value;
+  monthData.net = (v===''? null : Number(v));
+  await saveMonth(viewY, viewM);
+  render();
+};
+
+window.changeMonth = async function(delta){
+  viewM += delta;
+  if(viewM<0){ viewM=11; viewY--; }
+  if(viewM>11){ viewM=0; viewY++; }
+  await loadMonth(viewY, viewM);
+  render();
+};
+
+window.openSettings = function(){
+  document.getElementById('overlay').classList.add('open');
+};
+window.closeSettings = function(){
+  document.getElementById('overlay').classList.remove('open');
+};
+
+let draftTypes = null;
+window.updateType = function(idx, field, value){
+  if(!draftTypes) draftTypes = JSON.parse(JSON.stringify(types));
+  draftTypes[idx][field] = (field==='hours') ? Number(value) : value;
+};
+window.addType = function(){
+  if(!draftTypes) draftTypes = JSON.parse(JSON.stringify(types));
+  draftTypes.push({id:'T'+Date.now(), code:'', label:'', hours:0, color:'#5C7FA6'});
+  types = draftTypes;
+  render();
+  document.getElementById('overlay').classList.add('open');
+};
+window.removeType = function(idx){
+  if(!draftTypes) draftTypes = JSON.parse(JSON.stringify(types));
+  draftTypes.splice(idx,1);
+  types = draftTypes;
+  render();
+  document.getElementById('overlay').classList.add('open');
+};
+
+window.applySettings = async function(){
+  if(draftTypes) types = draftTypes;
+  pay.hourlyRate = Number(document.getElementById('hourlyRate').value)||0;
+  draftTypes = null;
+  await saveSettings();
+  closeSettings();
+  render();
+};
+
+(async function init(){
+  if(!localStorage.getItem(STORAGE_FIRSTUSE_KEY)){
+    localStorage.setItem(STORAGE_FIRSTUSE_KEY, new Date().toISOString());
+  }
+  await loadSettings();
+  await loadMonth(viewY, viewM);
+  render();
+})();
+</script>
+</body>
+</html>

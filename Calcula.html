@@ -35,7 +35,7 @@ body{
   padding:24px 16px 64px;
 }
 .app{
-  max-width:1080px;
+  max-width:760px;
   margin:0 auto;
 }
 .topbar{
@@ -43,7 +43,7 @@ body{
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  margin-bottom:20px;
+  margin-bottom:16px;
   flex-wrap:wrap;
 }
 .brand{
@@ -98,24 +98,21 @@ body{
   border:1px solid var(--line);
   background:var(--paper-raised);
   border-radius:10px;
-  padding:8px 14px;
+  padding:9px 10px;
   cursor:pointer;
   font-family:'IBM Plex Sans', sans-serif;
   font-weight:500;
-  font-size:0.85rem;
+  font-size:0.82rem;
   color:var(--ink);
-  display:flex;align-items:center;gap:6px;
+  display:flex;align-items:center;justify-content:center;gap:6px;
 }
 .icon-btn:hover{border-color:var(--ink-soft);}
 
-.grid{
+.panel-buttons{
   display:grid;
-  grid-template-columns:1fr 300px;
-  gap:20px;
-  align-items:start;
-}
-@media (max-width:800px){
-  .grid{grid-template-columns:1fr;}
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+  margin-bottom:16px;
 }
 
 /* legend */
@@ -123,7 +120,7 @@ body{
   display:flex;
   flex-wrap:wrap;
   gap:8px;
-  margin-bottom:14px;
+  margin-bottom:10px;
 }
 .chip{
   font-family:'IBM Plex Mono', monospace;
@@ -134,6 +131,14 @@ body{
   border:1px solid transparent;
   white-space:nowrap;
 }
+.calendar-note{
+  font-size:0.72rem;
+  color:var(--ink-soft);
+  margin:0 0 14px 2px;
+  display:flex;
+  align-items:center;
+}
+.calendar-note .holiday-dot{margin-left:0; margin-right:6px;}
 
 /* calendar */
 .calendar-card{
@@ -141,6 +146,38 @@ body{
   border:1px solid var(--line);
   border-radius:var(--radius);
   padding:16px;
+}
+.calendar-card-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:12px;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.calendar-card-title{
+  font-family:'Space Grotesk', sans-serif;
+  font-weight:600;
+  font-size:0.9rem;
+  color:var(--ink-soft);
+  text-transform:capitalize;
+}
+.edit-toggle{
+  border:1px solid var(--line);
+  background:var(--paper);
+  border-radius:999px;
+  padding:6px 12px;
+  font-size:0.75rem;
+  font-family:'IBM Plex Sans', sans-serif;
+  cursor:pointer;
+  color:var(--ink-soft);
+  white-space:nowrap;
+}
+.edit-toggle.active{
+  background:var(--amber-soft);
+  border-color:var(--amber);
+  color:var(--ink);
+  font-weight:600;
 }
 .weekdays{
   display:grid;
@@ -162,7 +199,7 @@ body{
   gap:5px;
 }
 .day{
-  min-height:108px;
+  min-height:100px;
   border-radius:8px;
   border:1px solid var(--line);
   background:var(--paper);
@@ -203,6 +240,7 @@ body{
   overflow:hidden;
   padding:0 1px;
 }
+.day-shifts-fill.readonly .shift-block{cursor:default;}
 .shift-block:not(:last-child){
   border-right:1px solid rgba(255,255,255,0.4);
 }
@@ -217,84 +255,36 @@ body{
   padding:2px 2px;
   cursor:pointer;
 }
+.add-shift:focus{outline:2px solid var(--amber); outline-offset:1px;}
+.holiday-dot{
+  display:inline-block;
+  width:5px;height:5px;
+  border-radius:50%;
+  background:var(--amber);
+  margin-left:3px;
+  vertical-align:middle;
+}
+
 @media (max-width:480px){
   body{padding:20px 8px 56px;}
   .days{gap:4px;}
-  .day{padding:3px; min-height:100px;}
+  .day{padding:3px; min-height:92px;}
   .day .num{font-size:0.7rem;}
+  .panel-buttons{gap:6px;}
+  .icon-btn{font-size:0.72rem; padding:8px 4px;}
 }
-.add-shift:focus{outline:2px solid var(--amber); outline-offset:1px;}
 
-/* summary punch card */
-.punchcard{
-  background:var(--ink);
-  color:var(--paper);
-  border-radius:var(--radius);
-  padding:22px 20px;
-  position:relative;
-  overflow:hidden;
-}
-.punchcard::before{
-  content:"";
-  position:absolute;
-  left:0; top:0; bottom:0;
-  width:14px;
-  background-image:radial-gradient(circle, var(--paper) 2.5px, transparent 2.6px);
-  background-size:14px 16px;
-  background-position:center;
-  opacity:0.5;
-}
-.punchcard h2{
-  font-family:'Space Grotesk', sans-serif;
-  font-size:0.95rem;
-  margin:0 0 16px 18px;
-  text-transform:capitalize;
-  color:var(--paper);
-  opacity:0.85;
-}
-.punchcard .row{
-  margin-left:18px;
-  margin-bottom:14px;
-}
-.punchcard .row .k{
-  font-size:0.68rem;
-  text-transform:uppercase;
-  letter-spacing:0.08em;
-  color:#9DAAA6;
-  margin-bottom:2px;
-}
-.punchcard .row .v{
-  font-family:'IBM Plex Mono', monospace;
-  font-size:1.4rem;
-  font-weight:600;
-}
-.punchcard .row.net .v{color:var(--teal-soft);}
-.punchcard .row.gross .v{color:var(--amber-soft);}
-.net-input{
-  font-family:'IBM Plex Mono', monospace;
-  font-size:1.4rem;
-  font-weight:600;
-  color:var(--teal-soft);
-  background:rgba(255,255,255,0.06);
-  border:1px solid #445561;
-  border-radius:6px;
-  padding:4px 8px;
-  width:calc(100% - 18px);
-}
-.net-input::placeholder{color:#6E7E7A; font-size:0.9rem;}
-
-/* settings panel */
+/* overlay / panel */
 .overlay{
   position:fixed; inset:0;
   background:rgba(28,43,57,0.45);
-  display:none;
+  display:flex;
   align-items:flex-start;
   justify-content:center;
   padding:40px 16px;
   z-index:50;
   overflow-y:auto;
 }
-.overlay.open{display:flex;}
 .panel{
   background:var(--paper-raised);
   border-radius:14px;
@@ -351,12 +341,6 @@ body{
   align-items:center;
   margin-bottom:8px;
 }
-.type-block{
-  margin-bottom:12px;
-  padding-bottom:10px;
-  border-bottom:1px dashed var(--line);
-}
-.type-block:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0;}
 .type-row input[type=color]{
   width:28px;height:28px;padding:0;border:none;border-radius:6px;cursor:pointer;background:none;
 }
@@ -399,27 +383,12 @@ body{
   font-family:'IBM Plex Sans', sans-serif;
 }
 
-/* stats */
-.stats-card{
-  background:var(--paper-raised);
-  border:1px solid var(--line);
-  border-radius:var(--radius);
-  padding:16px 18px;
-  margin-top:16px;
-}
-.stats-card h3{
-  font-family:'Space Grotesk', sans-serif;
-  font-size:0.85rem;
-  margin:0 0 12px;
-  color:var(--ink-soft);
-  text-transform:uppercase;
-  letter-spacing:0.06em;
-}
+/* stats / earnings rows */
 .special-row{
   display:flex;
   justify-content:space-between;
   font-family:'IBM Plex Mono', monospace;
-  font-size:0.82rem;
+  font-size:0.85rem;
   padding:5px 0;
 }
 .special-row-sep{
@@ -434,12 +403,80 @@ body{
   letter-spacing:0.06em;
   color:var(--amber);
 }
+.net-input-light{
+  width:100%;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:1.1rem;
+  font-weight:600;
+  color:var(--ink);
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:8px 10px;
+}
+
+/* multiplier blocks (Guadagni) */
+.mult-block{
+  margin-bottom:18px;
+  padding-bottom:14px;
+  border-bottom:1px dashed var(--line);
+}
+.mult-block:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0;}
+.mult-row{
+  display:flex;
+  gap:8px;
+  margin:6px 0 6px;
+}
+.mult-input{
+  flex:1;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:7px 9px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.85rem;
+}
+.mult-suggestions{
+  display:flex;
+  gap:4px;
+  flex-wrap:wrap;
+  margin-bottom:4px;
+}
+.mult-chip{
+  border:1px solid var(--line);
+  background:var(--paper);
+  border-radius:6px;
+  padding:4px 7px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.68rem;
+  cursor:pointer;
+  color:var(--ink-soft);
+}
+.mult-chip:hover{border-color:var(--amber); color:var(--amber);}
+.mult-toggle{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:0.76rem;
+  color:var(--ink-soft);
+  margin:8px 0 4px;
+}
+.mult-toggle input{width:14px;height:14px;cursor:pointer;}
+.mult-total{
+  display:flex;
+  justify-content:space-between;
+  font-family:'IBM Plex Mono', monospace;
+  font-weight:700;
+  font-size:0.92rem;
+  margin-top:8px;
+  padding-top:8px;
+  border-top:1px solid var(--line);
+}
 
 .year-bars{
   display:flex;
   align-items:flex-end;
   gap:4px;
-  height:100px;
+  height:120px;
 }
 .year-bar-col{
   flex:1;
@@ -460,48 +497,10 @@ body{
 .year-bar-col.current .year-bar{background:var(--amber);}
 .year-bar-label{
   font-family:'IBM Plex Mono', monospace;
-  font-size:0.58rem;
+  font-size:0.6rem;
   color:var(--ink-soft);
 }
 .year-bar-col.current .year-bar-label{color:var(--amber); font-weight:700;}
-
-.day.special{
-  border-color:var(--amber);
-}
-.holiday-dot{
-  display:inline-block;
-  width:5px;height:5px;
-  border-radius:50%;
-  background:var(--amber);
-  margin-left:3px;
-  vertical-align:middle;
-}
-.extra-input{
-  width:100%;
-  border:1px solid var(--amber);
-  background:rgba(217,142,61,0.08);
-  color:var(--rust);
-  font-family:'IBM Plex Mono', monospace;
-  font-weight:600;
-  font-size:0.6rem;
-  border-radius:4px;
-  padding:1px 3px;
-}
-.extra-input::placeholder{color:var(--amber); opacity:0.8;}
-.calendar-note{
-  font-size:0.72rem;
-  color:var(--ink-soft);
-  margin:-6px 0 14px 2px;
-}
-.calendar-note .holiday-dot{margin-left:0; margin-right:4px;}
-
-.loading{
-  text-align:center;
-  padding:40px;
-  color:var(--ink-soft);
-  font-family:'IBM Plex Mono', monospace;
-  font-size:0.85rem;
-}
 
 .backup-banner{
   display:flex;
@@ -517,11 +516,7 @@ body{
   font-size:0.82rem;
   color:var(--ink);
 }
-.backup-banner-actions{
-  display:flex;
-  gap:8px;
-  flex-shrink:0;
-}
+.backup-banner-actions{display:flex; gap:8px; flex-shrink:0;}
 .backup-banner-actions button{
   border:none;
   border-radius:7px;
@@ -531,14 +526,15 @@ body{
   cursor:pointer;
   font-weight:500;
 }
-.backup-banner-actions .bb-primary{
-  background:var(--ink);
-  color:var(--paper);
-}
-.backup-banner-actions .bb-ghost{
-  background:transparent;
+.backup-banner-actions .bb-primary{background:var(--ink); color:var(--paper);}
+.backup-banner-actions .bb-ghost{background:transparent; color:var(--ink-soft); border:1px solid var(--ink-soft);}
+
+.loading{
+  text-align:center;
+  padding:40px;
   color:var(--ink-soft);
-  border:1px solid var(--ink-soft);
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.85rem;
 }
 </style>
 </head>
@@ -557,6 +553,8 @@ const BACKUP_REMINDER_DAYS = 30;
 const SNOOZE_DAYS = 7;
 const monthKey = (y,m)=>`month-${y}-${String(m+1).padStart(2,'0')}`;
 
+const MULT_SUGGESTIONS = [9.26958, 58.82615, 12.39, 1.44642];
+
 const DEFAULT_TYPES = [
   {id:'M', code:'M', label:'Mattino', hours:6, color:'#3E7C6B'},
   {id:'P', code:'P', label:'Pomeriggio', hours:6, color:'#D98E3D'},
@@ -565,14 +563,26 @@ const DEFAULT_TYPES = [
   {id:'R', code:'R', label:'Riposo', hours:0, color:'#8B9A96'},
   {id:'F', code:'F', label:'Ferie', hours:0, color:'#8B9A96'},
 ];
-const DEFAULT_PAY = {hourlyRate:10};
+function defaultPay(){
+  return {
+    hourlyRate: 10,
+    multipliers: {
+      holiday: {m1:null, m2:null, useM2:false},
+      sunday: {m1:null, m2:null, useM2:false},
+      night: {m1:null, m2:null, useM2:false},
+      vacation: {m1:null, m2:null, useM2:false},
+    }
+  };
+}
 
 let types = DEFAULT_TYPES;
-let pay = DEFAULT_PAY;
+let pay = defaultPay();
 let today = new Date();
 let viewY = today.getFullYear();
 let viewM = today.getMonth();
 let monthData = {shifts:{}, net:null, extra:{}};
+let editMode = false;
+let activePanel = null; // 'settings' | 'stats' | 'earnings' | null
 
 const ITALIAN_MONTHS = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
 const ITALIAN_MONTHS_SHORT = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
@@ -591,7 +601,7 @@ function getEasterDate(year){
   const k = c%4;
   const l = (32+2*e+2*i-h-k)%7;
   const m = Math.floor((a+11*h+22*l)/451);
-  const month = Math.floor((h+l-7*m+114)/31); // 3=marzo, 4=aprile
+  const month = Math.floor((h+l-7*m+114)/31);
   const day = ((h+l-7*m+114)%31)+1;
   return new Date(year, month-1, day);
 }
@@ -624,11 +634,20 @@ async function loadSettings(){
   try{
     const t = localStorage.getItem(STORAGE_TYPES_KEY);
     if(t) types = JSON.parse(t);
-  }catch(e){ /* not set yet, use default */ }
+  }catch(e){}
+  pay = defaultPay();
   try{
     const p = localStorage.getItem(STORAGE_PAY_KEY);
-    if(p) pay = JSON.parse(p);
-  }catch(e){ /* not set yet, use default */ }
+    if(p){
+      const parsed = JSON.parse(p);
+      if(parsed.hourlyRate!==undefined) pay.hourlyRate = parsed.hourlyRate;
+      if(parsed.multipliers){
+        Object.keys(pay.multipliers).forEach(k=>{
+          if(parsed.multipliers[k]) pay.multipliers[k] = {...pay.multipliers[k], ...parsed.multipliers[k]};
+        });
+      }
+    }
+  }catch(e){}
 }
 async function saveSettings(){
   try{
@@ -646,7 +665,6 @@ function normalizeMonthData(parsed){
     return {shifts, net: (parsed.net===undefined?null:parsed.net), extra};
   }
   if(parsed && typeof parsed==='object'){
-    // formato precedente: {day: typeId}
     const shifts = {};
     Object.entries(parsed).forEach(([d,v])=>{ shifts[d] = Array.isArray(v)?v:[v]; });
     return {shifts, net:null, extra:{}};
@@ -664,14 +682,6 @@ async function saveMonth(y,m){
   try{
     localStorage.setItem(monthKey(y,m), JSON.stringify(monthData));
   }catch(e){ console.error('Errore salvataggio turni del mese', e); }
-}
-function getStoredNet(y,m){
-  try{
-    const r = localStorage.getItem(monthKey(y,m));
-    if(!r) return null;
-    const p = normalizeMonthData(JSON.parse(r));
-    return p.net===undefined?null:p.net;
-  }catch(e){ return null; }
 }
 
 function exportBackup(){
@@ -724,7 +734,7 @@ function importBackup(event){
       await loadSettings();
       await loadMonth(viewY, viewM);
       alert('Backup importato con successo.');
-      closeSettings();
+      closePanel();
       render();
     }catch(err){
       alert('File di backup non valido.');
@@ -736,8 +746,19 @@ window.importBackup = importBackup;
 
 function typeById(id){ return types.find(t=>t.id===id); }
 
+function calcMultiplied(qty, cfg){
+  if(!cfg) return 0;
+  const m1 = Number(cfg.m1)||0;
+  let total = qty * m1;
+  if(cfg.useM2){
+    const m2 = Number(cfg.m2)||0;
+    total += qty * m2;
+  }
+  return total;
+}
+
 function computeSummary(){
-  let ordinaryHours = 0;
+  let normalHours = 0;
   let holidayHours = 0, sundayHours = 0;
   let vacationDays = new Set();
   let nightDays = new Set();
@@ -758,28 +779,24 @@ function computeSummary(){
 
       if(code==='F'){
         vacationDays.add(day);
-        return; // conta solo come giorno di ferie, non ore/soldi
+        return; // solo giorno, non ore/soldi
       }
-      if(isHoliday){ holidayHours += hrs; }
-      else if(isSunday){ sundayHours += hrs; }
-      else { ordinaryHours += hrs; }
+      if(isHoliday){ holidayHours += hrs; return; }
+      if(isSunday){ sundayHours += hrs; return; }
+      normalHours += hrs;
     });
   });
 
-  const totalHours = ordinaryHours + holidayHours + sundayHours;
-
-  let holidayExtra = 0, sundayExtra = 0;
-  Object.entries(monthData.extra||{}).forEach(([day,v])=>{
-    const d = Number(day);
-    const val = Number(v)||0;
-    const holidayName = getHolidayName(viewY, viewM, d);
-    const isSunday = new Date(viewY, viewM, d).getDay()===0;
-    if(holidayName) holidayExtra += val;
-    else if(isSunday) sundayExtra += val;
-  });
-
+  const ordinaryHours = normalHours + sundayHours; // usate per il lordo stimato
+  const totalHours = normalHours + sundayHours + holidayHours; // tutte le ore lavorate
   const gross = ordinaryHours * (Number(pay.hourlyRate)||0);
-  return {totalHours, gross, holidayHours, sundayHours, holidayExtra, sundayExtra, vacationDays: vacationDays.size, nightDays: nightDays.size, net: monthData.net};
+
+  return {
+    totalHours, ordinaryHours, gross,
+    holidayHours, sundayHours,
+    vacationDays: vacationDays.size, nightDays: nightDays.size,
+    net: monthData.net
+  };
 }
 
 function fmtEuro(n){
@@ -787,13 +804,13 @@ function fmtEuro(n){
   return Number(n).toLocaleString('it-IT', {style:'currency', currency:'EUR'});
 }
 function fmtHours(n){
-  return n.toLocaleString('it-IT', {maximumFractionDigits:1});
+  return Number(n).toLocaleString('it-IT', {maximumFractionDigits:1});
 }
 
 function daysInMonth(y,m){ return new Date(y, m+1, 0).getDate(); }
 function firstWeekdayMon0(y,m){
-  const d = new Date(y,m,1).getDay(); // 0=Sun
-  return (d+6)%7; // 0=Mon
+  const d = new Date(y,m,1).getDay();
+  return (d+6)%7;
 }
 
 function hexToSoftBg(hex){
@@ -819,6 +836,112 @@ function renderAnnualNetChart(){
   }).join('');
   return `<div class="year-bars">${bars}</div>`;
 }
+function getStoredNet(y,m){
+  try{
+    const r = localStorage.getItem(monthKey(y,m));
+    if(!r) return null;
+    const p = normalizeMonthData(JSON.parse(r));
+    return p.net===undefined?null:p.net;
+  }catch(e){ return null; }
+}
+
+function renderMultBlock(catKey, label, qty, unitLabel, unitSuffix){
+  const cfg = pay.multipliers[catKey];
+  const amount = calcMultiplied(qty, cfg);
+  const chipsHtml = MULT_SUGGESTIONS.map(s=>`<button type="button" class="mult-chip" onclick="setMult('${catKey}','m1',${s})">×${s}</button>`).join('');
+  const chips2Html = MULT_SUGGESTIONS.map(s=>`<button type="button" class="mult-chip" onclick="setMult('${catKey}','m2',${s})">×${s}</button>`).join('');
+  return `
+    <div class="mult-block">
+      <div class="section-label">${label}</div>
+      <div class="special-row"><span>${unitLabel}</span><span>${fmtHours(qty)} ${unitSuffix}</span></div>
+      <div class="mult-row">
+        <input type="number" step="any" class="mult-input" placeholder="moltiplicatore" value="${cfg.m1!==null&&cfg.m1!==undefined?cfg.m1:''}" data-cat="${catKey}" data-field="m1" onchange="onMultChange(event)">
+      </div>
+      <div class="mult-suggestions">${chipsHtml}</div>
+      <label class="mult-toggle">
+        <input type="checkbox" ${cfg.useM2?'checked':''} data-cat="${catKey}" onchange="onMultToggle(event)">
+        Aggiungi una seconda moltiplicazione
+      </label>
+      ${cfg.useM2?`
+      <div class="mult-row">
+        <input type="number" step="any" class="mult-input" placeholder="secondo moltiplicatore" value="${cfg.m2!==null&&cfg.m2!==undefined?cfg.m2:''}" data-cat="${catKey}" data-field="m2" onchange="onMultChange(event)">
+      </div>
+      <div class="mult-suggestions">${chips2Html}</div>`:''}
+      <div class="mult-total"><span>Totale stimato</span><span>${fmtEuro(amount)}</span></div>
+    </div>`;
+}
+
+function renderEarningsPanel(summary){
+  const holidayAmount = calcMultiplied(summary.holidayHours, pay.multipliers.holiday);
+  const sundayAmount = calcMultiplied(summary.sundayHours, pay.multipliers.sunday);
+  const nightAmount = calcMultiplied(summary.nightDays, pay.multipliers.night);
+  const vacationAmount = calcMultiplied(summary.vacationDays, pay.multipliers.vacation);
+  const grandTotal = summary.gross + holidayAmount + sundayAmount + nightAmount + vacationAmount;
+
+  return `
+    <h2>Guadagni — ${ITALIAN_MONTHS[viewM]} ${viewY}</h2>
+    <div class="section-label">Riepilogo mese</div>
+    <div class="special-row"><span>Ore totali</span><span>${fmtHours(summary.totalHours)} h</span></div>
+    <div class="special-row"><span>Lordo (ore ordinarie)</span><span>${fmtEuro(summary.gross)}</span></div>
+    <div class="special-row" style="color:var(--ink-soft); font-size:0.72rem; padding-top:0;">+ maggiorazioni festivi / domenicali / notte / ferie (dettaglio sotto)</div>
+    <div class="mult-total" style="font-size:1rem; margin-top:10px;"><span>Totale mese stimato</span><span>${fmtEuro(grandTotal)}</span></div>
+    <div style="margin:16px 0 20px;">
+      <div class="section-label" style="margin:0 0 6px;">Netto reale del mese</div>
+      <input type="number" step="0.01" class="net-input-light" id="netInput" placeholder="Inserisci l'importo" value="${summary.net===null||summary.net===undefined?'':summary.net}" onchange="onNetChange(event)">
+    </div>
+    ${renderMultBlock('holiday','Festivi', summary.holidayHours, 'Ore', 'h')}
+    ${renderMultBlock('sunday','Domenicali', summary.sundayHours, 'Ore', 'h')}
+    ${renderMultBlock('night','Notte', summary.nightDays, 'Giorni', 'gg')}
+    ${renderMultBlock('vacation','Ferie', summary.vacationDays, 'Giorni', 'gg')}
+  `;
+}
+
+function renderStatsPanel(){
+  return `
+    <h2>Statistiche</h2>
+    <div class="section-label">Netto — andamento ${viewY}</div>
+    ${renderAnnualNetChart()}
+  `;
+}
+
+function renderSettingsPanel(){
+  return `
+    <h2>Impostazioni</h2>
+    <div class="section-label">Paga oraria (per il lordo stimato)</div>
+    <div class="pay-row">
+      <label>Paga oraria lorda (€)
+        <input type="number" step="0.01" id="hourlyRate" value="${pay.hourlyRate}">
+      </label>
+    </div>
+
+    <div class="section-label">Tipi di turno</div>
+    <div class="calendar-note" style="margin:-4px 0 10px;">il tipo con codice "F" viene sempre contato come giorno di ferie, "N" come giorno di notte</div>
+    <div id="typesList">
+      ${types.map((t,i)=>`
+        <div class="type-row" data-idx="${i}">
+          <input type="color" value="${t.color}" onchange="updateType(${i},'color',this.value)">
+          <input type="text" value="${t.code}" placeholder="Cod." onchange="updateType(${i},'code',this.value)">
+          <input type="text" value="${t.label}" placeholder="Etichetta" onchange="updateType(${i},'label',this.value)">
+          <input type="number" step="0.5" value="${t.hours}" onchange="updateType(${i},'hours',this.value)">
+          <button class="del" onclick="removeType(${i})" title="Elimina">✕</button>
+        </div>`).join('')}
+    </div>
+    <button class="add-type" onclick="addType()">+ Aggiungi tipo di turno</button>
+
+    <div class="section-label">Backup dati</div>
+    <div class="pay-row">
+      <button class="icon-btn" onclick="exportBackup()" type="button">📤 Esporta backup</button>
+      <label class="icon-btn" style="cursor:pointer;">
+        📥 Importa backup
+        <input type="file" accept="application/json" style="display:none;" onchange="importBackup(event)">
+      </label>
+    </div>
+
+    <div class="panel-actions">
+      <button class="btn-primary" onclick="applySettings()">Salva</button>
+    </div>
+  `;
+}
 
 function render(){
   const app = document.getElementById('app');
@@ -836,19 +959,19 @@ function render(){
     const blocks = assigned.map((id,idx)=>{
       const t = typeById(id);
       if(!t) return '';
-      return `<div class="shift-block" style="background:${t.color}; font-size:${blockFontSize};" onclick="removeShift(${d},${idx})" title="Rimuovi ${t.label}">${t.code}</div>`;
+      const clickAttr = editMode ? `onclick="removeShift(${d},${idx})"` : '';
+      const titleAttr = editMode ? `title="Rimuovi ${t.label}"` : `title="${t.label}"`;
+      return `<div class="shift-block" style="background:${t.color}; font-size:${blockFontSize};" ${clickAttr} ${titleAttr}>${t.code}</div>`;
     }).join('');
     const options = `<option value="">+</option>` + types.map(t=>`<option value="${t.id}">${t.code}</option>`).join('');
     const isSunday = new Date(viewY, viewM, d).getDay()===0;
     const holidayName = getHolidayName(viewY, viewM, d);
     const isSpecial = isSunday || holidayName;
-    const extraVal = monthData.extra[d];
     dayCells += `
       <div class="day ${isToday(d)?'today':''} ${isSpecial?'special':''}">
         <span class="num">${d}${isSpecial?`<span class="holiday-dot" title="${holidayName||'Domenica'}"></span>`:''}</span>
-        <div class="day-shifts-fill">${blocks}</div>
-        <select class="add-shift" data-day="${d}" onchange="addShift(event)">${options}</select>
-        ${isSpecial?`<input type="number" step="0.01" class="extra-input" data-day="${d}" placeholder="+ €" value="${extraVal!==undefined?extraVal:''}" onchange="onExtraChange(event)">`:''}
+        <div class="day-shifts-fill ${editMode?'':'readonly'}">${blocks}</div>
+        ${editMode?`<select class="add-shift" data-day="${d}" onchange="addShift(event)">${options}</select>`:''}
       </div>`;
   }
 
@@ -873,94 +996,35 @@ function render(){
         <span class="label">${ITALIAN_MONTHS[viewM]} ${viewY}</span>
         <button onclick="changeMonth(1)" aria-label="Mese successivo">›</button>
       </div>
-      <button class="icon-btn" onclick="openSettings()">⚙ Impostazioni</button>
+    </div>
+
+    <div class="panel-buttons">
+      <button class="icon-btn" onclick="openPanel('settings')">⚙ Impostazioni</button>
+      <button class="icon-btn" onclick="openPanel('stats')">📈 Statistiche</button>
+      <button class="icon-btn" onclick="openPanel('earnings')">💶 Guadagni</button>
     </div>
 
     <div class="legend">${legend}</div>
-    <div class="calendar-note"><span class="holiday-dot"></span>domenica o festivo — tocca "+ €" nel giorno per segnare un guadagno extra</div>
+    <div class="calendar-note"><span class="holiday-dot"></span>domenica o festivo</div>
 
-    <div class="grid">
-      <div class="calendar-card">
-        <div class="weekdays">${ITALIAN_WEEKDAYS.map(w=>`<span>${w}</span>`).join('')}</div>
-        <div class="days">${dayCells}</div>
+    <div class="calendar-card">
+      <div class="calendar-card-header">
+        <span class="calendar-card-title">${ITALIAN_MONTHS[viewM]} ${viewY}</span>
+        <button class="edit-toggle ${editMode?'active':''}" onclick="toggleEditMode()">${editMode?'🔓 Modifica attiva':'🔒 Modifica turni'}</button>
       </div>
-
-      <div>
-        <div class="punchcard">
-          <h2>${ITALIAN_MONTHS[viewM]} ${viewY}</h2>
-          <div class="row">
-            <div class="k">Ore totali</div>
-            <div class="v">${fmtHours(summary.totalHours)} h</div>
-          </div>
-          <div class="row gross">
-            <div class="k">Lordo (stimato dalle ore ordinarie)</div>
-            <div class="v">${fmtEuro(summary.gross)}</div>
-          </div>
-          <div class="row net">
-            <div class="k">Netto reale del mese</div>
-            <input type="number" step="0.01" class="net-input" id="netInput" placeholder="Inserisci l'importo" value="${summary.net===null||summary.net===undefined?'':summary.net}" onchange="onNetChange(event)">
-          </div>
-        </div>
-
-        <div class="stats-card">
-          <h3>Giorni speciali</h3>
-          <div class="special-group-label">Festivi</div>
-          <div class="special-row"><span>Ore</span><span>${fmtHours(summary.holidayHours)} h</span></div>
-          <div class="special-row"><span>Extra</span><span>${fmtEuro(summary.holidayExtra)}</span></div>
-          <div class="special-group-label" style="margin-top:10px;">Domenicali</div>
-          <div class="special-row"><span>Ore</span><span>${fmtHours(summary.sundayHours)} h</span></div>
-          <div class="special-row"><span>Extra</span><span>${fmtEuro(summary.sundayExtra)}</span></div>
-          <div class="special-row special-row-sep"><span>Giorni di ferie</span><span>${summary.vacationDays} gg</span></div>
-          <div class="special-row"><span>Giorni di notte</span><span>${summary.nightDays} gg</span></div>
-        </div>
-
-        <div class="stats-card">
-          <h3>Netto — andamento ${viewY}</h3>
-          ${renderAnnualNetChart()}
-        </div>
-      </div>
+      <div class="weekdays">${ITALIAN_WEEKDAYS.map(w=>`<span>${w}</span>`).join('')}</div>
+      <div class="days">${dayCells}</div>
     </div>
 
-    <div class="overlay" id="overlay">
+    ${activePanel ? `
+    <div class="overlay">
       <div class="panel">
-        <button class="close" onclick="closeSettings()">×</button>
-        <h2>Impostazioni</h2>
-
-        <div class="section-label">Paga oraria (per il lordo stimato)</div>
-        <div class="pay-row">
-          <label>Paga oraria lorda (€)
-            <input type="number" step="0.01" id="hourlyRate" value="${pay.hourlyRate}">
-          </label>
-        </div>
-
-        <div class="section-label">Tipi di turno</div>
-        <div class="calendar-note" style="margin:-4px 0 10px;">il tipo con codice "F" viene sempre contato come giorno di ferie</div>
-        <div id="typesList">
-          ${types.map((t,i)=>`
-            <div class="type-row" data-idx="${i}">
-              <input type="color" value="${t.color}" onchange="updateType(${i},'color',this.value)">
-              <input type="text" value="${t.code}" placeholder="Cod." onchange="updateType(${i},'code',this.value)">
-              <input type="text" value="${t.label}" placeholder="Etichetta" onchange="updateType(${i},'label',this.value)">
-              <input type="number" step="0.5" value="${t.hours}" onchange="updateType(${i},'hours',this.value)">
-              <button class="del" onclick="removeType(${i})" title="Elimina">✕</button>
-            </div>`).join('')}
-        </div>
-        <button class="add-type" onclick="addType()">+ Aggiungi tipo di turno</button>
-
-        <div class="section-label">Backup dati</div>
-        <div class="pay-row">
-          <button class="icon-btn" onclick="exportBackup()" type="button">📤 Esporta backup</button>
-          <label class="icon-btn" style="cursor:pointer; justify-content:center;">
-            📥 Importa backup
-            <input type="file" accept="application/json" style="display:none;" onchange="importBackup(event)">
-          </label>
-        </div>
-
-        <div class="panel-actions">
-          <button class="btn-primary" onclick="applySettings()">Salva</button>
-        </div>
+        <button class="close" onclick="closePanel()">×</button>
+        ${activePanel==='settings' ? renderSettingsPanel() : ''}
+        ${activePanel==='stats' ? renderStatsPanel() : ''}
+        ${activePanel==='earnings' ? renderEarningsPanel(summary) : ''}
       </div>
-    </div>
+    </div>` : ''}
   `;
 }
 
@@ -975,6 +1039,7 @@ window.addShift = async function(e){
 };
 
 window.removeShift = async function(day, idx){
+  if(!editMode) return;
   if(monthData.shifts[day]){
     monthData.shifts[day].splice(idx,1);
     if(monthData.shifts[day].length===0) delete monthData.shifts[day];
@@ -983,12 +1048,8 @@ window.removeShift = async function(day, idx){
   render();
 };
 
-window.onExtraChange = async function(e){
-  const day = Number(e.target.dataset.day);
-  const v = e.target.value;
-  if(!monthData.extra) monthData.extra = {};
-  if(v===''){ delete monthData.extra[day]; } else { monthData.extra[day] = Number(v); }
-  await saveMonth(viewY, viewM);
+window.toggleEditMode = function(){
+  editMode = !editMode;
   render();
 };
 
@@ -996,6 +1057,26 @@ window.onNetChange = async function(e){
   const v = e.target.value;
   monthData.net = (v===''? null : Number(v));
   await saveMonth(viewY, viewM);
+  render();
+};
+
+window.onMultChange = async function(e){
+  const cat = e.target.dataset.cat;
+  const field = e.target.dataset.field;
+  const v = e.target.value;
+  pay.multipliers[cat][field] = v===''?null:Number(v);
+  await saveSettings();
+  render();
+};
+window.onMultToggle = async function(e){
+  const cat = e.target.dataset.cat;
+  pay.multipliers[cat].useM2 = e.target.checked;
+  await saveSettings();
+  render();
+};
+window.setMult = async function(cat, field, val){
+  pay.multipliers[cat][field] = val;
+  await saveSettings();
   render();
 };
 
@@ -1007,11 +1088,13 @@ window.changeMonth = async function(delta){
   render();
 };
 
-window.openSettings = function(){
-  document.getElementById('overlay').classList.add('open');
+window.openPanel = function(name){
+  activePanel = name;
+  render();
 };
-window.closeSettings = function(){
-  document.getElementById('overlay').classList.remove('open');
+window.closePanel = function(){
+  activePanel = null;
+  render();
 };
 
 let draftTypes = null;
@@ -1024,14 +1107,12 @@ window.addType = function(){
   draftTypes.push({id:'T'+Date.now(), code:'', label:'', hours:0, color:'#5C7FA6'});
   types = draftTypes;
   render();
-  document.getElementById('overlay').classList.add('open');
 };
 window.removeType = function(idx){
   if(!draftTypes) draftTypes = JSON.parse(JSON.stringify(types));
   draftTypes.splice(idx,1);
   types = draftTypes;
   render();
-  document.getElementById('overlay').classList.add('open');
 };
 
 window.applySettings = async function(){
@@ -1039,7 +1120,7 @@ window.applySettings = async function(){
   pay.hourlyRate = Number(document.getElementById('hourlyRate').value)||0;
   draftTypes = null;
   await saveSettings();
-  closeSettings();
+  closePanel();
   render();
 };
 

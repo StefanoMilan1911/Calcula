@@ -422,13 +422,36 @@ body{
   border-bottom:1px dashed var(--line);
 }
 .mult-block:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0;}
+.mult-header{
+  width:100%;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  background:none;
+  border:none;
+  padding:0;
+  cursor:pointer;
+  text-align:left;
+  font-family:inherit;
+}
 .mult-title{
   font-family:'Space Grotesk', sans-serif;
   font-weight:700;
   font-size:1.02rem;
   color:var(--ink);
-  margin-bottom:8px;
+  margin:0;
 }
+.mult-header-right{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.85rem;
+  color:var(--ink);
+  white-space:nowrap;
+}
+.chevron{color:var(--ink-soft); font-size:0.68rem;}
+.mult-body{margin-top:10px;}
 .mult-row{
   display:flex;
   gap:8px;
@@ -574,6 +597,57 @@ body{
   font-size:0.85rem;
 }
 
+.login-screen{
+  min-height:70vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.login-card{
+  background:var(--paper-raised);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:32px 26px;
+  max-width:360px;
+  width:100%;
+}
+.login-title{
+  font-family:'Space Grotesk', sans-serif;
+  font-size:1.6rem;
+  margin:0 0 4px;
+  text-align:center;
+}
+.login-sub{
+  text-align:center;
+  color:var(--ink-soft);
+  font-size:0.85rem;
+  margin:0 0 20px;
+}
+.login-field{
+  display:block;
+  font-size:0.8rem;
+  color:var(--ink-soft);
+  margin-bottom:12px;
+}
+.login-field input{
+  display:block;
+  width:100%;
+  margin-top:4px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:9px 11px;
+  font-family:'IBM Plex Sans', sans-serif;
+  font-size:0.9rem;
+  color:var(--ink);
+  background:var(--paper);
+}
+.login-note{
+  font-size:0.68rem;
+  color:var(--ink-soft);
+  text-align:center;
+  margin-top:16px;
+}
+
 body.dark{
   --ink:#E8ECEE;
   --ink-soft:#93A2A9;
@@ -598,6 +672,7 @@ const STORAGE_LASTBACKUP_KEY = 'last-backup-at';
 const STORAGE_FIRSTUSE_KEY = 'first-use-at';
 const STORAGE_SNOOZE_KEY = 'backup-snooze-until';
 const STORAGE_DARKMODE_KEY = 'dark-mode';
+const STORAGE_AUTH_KEY = 'fake-auth-user';
 const BACKUP_REMINDER_DAYS = 30;
 const SNOOZE_DAYS = 7;
 const monthKey = (y,m)=>`month-${y}-${String(m+1).padStart(2,'0')}`;
@@ -621,7 +696,6 @@ const DEFAULT_TYPES = [
 function defaultPay(){
   return {
     hourlyRate: 10,
-    overtimeThreshold: null,
     multipliers: {
       overtime: {m1:null, m2:null, useM2:false},
       holiday: {m1:null, m2:null, useM2:false},
@@ -637,8 +711,10 @@ let pay = defaultPay();
 let today = new Date();
 let viewY = today.getFullYear();
 let viewM = today.getMonth();
-let monthData = {shifts:{}, net:null, extra:{}};
+let monthData = {shifts:{}, net:null, extra:{}, overtimeThreshold:null};
 let editMode = false;
+let authUser = null;
+let openEarningsSections = new Set();
 let activePanel = null; // 'settings' | 'stats' | 'earnings' | null
 let darkMode = false;
 let openSuggestionKeys = new Set();
@@ -700,7 +776,6 @@ async function loadSettings(){
     if(p){
       const parsed = JSON.parse(p);
       if(parsed.hourlyRate!==undefined) pay.hourlyRate = parsed.hourlyRate;
-      if(parsed.overtimeThreshold!==undefined) pay.overtimeThreshold = parsed.overtimeThreshold;
       if(parsed.multipliers){
         Object.keys(pay.multipliers).forEach(k=>{
           if(parsed.multipliers[k]) pay.multipliers[k] = {...pay.multipliers[k], ...parsed.multipliers[k]};
@@ -712,6 +787,10 @@ async function loadSettings(){
     darkMode = localStorage.getItem(STORAGE_DARKMODE_KEY) === '1';
   }catch(e){ darkMode = false; }
   applyDarkModeClass();
+  try{
+    const a = localStorage.getItem(STORAGE_AUTH_KEY);
+    authUser = a ? JSON.parse(a) : null;
+  }catch(e){ authUser = null; }
 }
 function applyDarkModeClass(){
   document.body.classList.toggle('dark', darkMode);
@@ -731,21 +810,21 @@ function normalizeMonthData(parsed){
     Object.entries(parsed.shifts).forEach(([d,v])=>{ shifts[d] = Array.isArray(v)?v:[v]; });
     const extra = {};
     if(parsed.extra) Object.entries(parsed.extra).forEach(([d,v])=>{ extra[d] = Number(v); });
-    return {shifts, net: (parsed.net===undefined?null:parsed.net), extra};
+    return {shifts, net: (parsed.net===undefined?null:parsed.net), extra, overtimeThreshold: (parsed.overtimeThreshold===undefined?null:parsed.overtimeThreshold)};
   }
   if(parsed && typeof parsed==='object'){
     const shifts = {};
     Object.entries(parsed).forEach(([d,v])=>{ shifts[d] = Array.isArray(v)?v:[v]; });
-    return {shifts, net:null, extra:{}};
+    return {shifts, net:null, extra:{}, overtimeThreshold:null};
   }
-  return {shifts:{}, net:null, extra:{}};
+  return {shifts:{}, net:null, extra:{}, overtimeThreshold:null};
 }
 
 async function loadMonth(y,m){
   try{
     const r = localStorage.getItem(monthKey(y,m));
-    monthData = r ? normalizeMonthData(JSON.parse(r)) : {shifts:{}, net:null, extra:{}};
-  }catch(e){ monthData = {shifts:{}, net:null, extra:{}}; }
+    monthData = r ? normalizeMonthData(JSON.parse(r)) : {shifts:{}, net:null, extra:{}, overtimeThreshold:null};
+  }catch(e){ monthData = {shifts:{}, net:null, extra:{}, overtimeThreshold:null}; }
 }
 async function saveMonth(y,m){
   try{
@@ -761,15 +840,25 @@ function exportBackup(){
       data[k] = localStorage.getItem(k);
     }
   }
-  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'cartellino-backup.json';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  const jsonStr = JSON.stringify(data, null, 2);
+
+  if(window.ExportBackup){
+    // Dentro l'app Flutter: manda il contenuto al lato nativo, che lo condivide/salva.
+    const b64 = btoa(encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (m,p1)=>String.fromCharCode('0x'+p1)));
+    window.ExportBackup.postMessage(b64);
+  } else {
+    // Browser normale: scarica come file, come sempre.
+    const blob = new Blob([jsonStr], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cartellino-backup.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   localStorage.setItem(STORAGE_LASTBACKUP_KEY, new Date().toISOString());
   localStorage.removeItem(STORAGE_SNOOZE_KEY);
   render();
@@ -914,8 +1003,7 @@ function getStoredNet(y,m){
   }catch(e){ return null; }
 }
 
-function calcOvertimeHours(ordinaryHours){
-  const threshold = pay.overtimeThreshold;
+function calcOvertimeHours(threshold, ordinaryHours){
   if(threshold===null || threshold===undefined || threshold==='') return 0;
   return Math.max(0, ordinaryHours - Number(threshold));
 }
@@ -935,58 +1023,79 @@ function renderSuggestions(catKey, field){
 function renderMultBlock(catKey, label, qty, unitLabel, unitSuffix){
   const cfg = pay.multipliers[catKey];
   const amount = calcMultiplied(qty, cfg);
+  const isOpen = openEarningsSections.has(catKey);
   return `
     <div class="mult-block">
-      <div class="mult-title">${label}</div>
-      <div class="special-row"><span>${unitLabel}</span><span>${fmtHours(qty)} ${unitSuffix}</span></div>
-      <div class="mult-row">
-        <input type="number" step="any" class="mult-input" placeholder="moltiplicatore" value="${cfg.m1!==null&&cfg.m1!==undefined?cfg.m1:''}" data-cat="${catKey}" data-field="m1" onchange="onMultChange(event)">
-      </div>
-      ${renderSuggestions(catKey,'m1')}
-      <label class="mult-toggle">
-        <input type="checkbox" ${cfg.useM2?'checked':''} data-cat="${catKey}" onchange="onMultToggle(event)">
-        Aggiungi una seconda moltiplicazione
-      </label>
-      ${cfg.useM2?`
-      <div class="mult-row">
-        <input type="number" step="any" class="mult-input" placeholder="secondo moltiplicatore" value="${cfg.m2!==null&&cfg.m2!==undefined?cfg.m2:''}" data-cat="${catKey}" data-field="m2" onchange="onMultChange(event)">
-      </div>
-      ${renderSuggestions(catKey,'m2')}`:''}
-      <div class="mult-total"><span>Totale stimato</span><span>${fmtEuro(amount)}</span></div>
+      <button type="button" class="mult-header" onclick="toggleEarningsSection('${catKey}')">
+        <span class="mult-title">${label}</span>
+        <span class="mult-header-right"><b>${fmtEuro(amount)}</b><span class="chevron">${isOpen?'▲':'▼'}</span></span>
+      </button>
+      ${isOpen?`
+      <div class="mult-body">
+        <div class="special-row"><span>${unitLabel}</span><span>${fmtHours(qty)} ${unitSuffix}</span></div>
+        <div class="mult-row">
+          <input type="number" step="any" class="mult-input" placeholder="moltiplicatore" value="${cfg.m1!==null&&cfg.m1!==undefined?cfg.m1:''}" data-cat="${catKey}" data-field="m1" onchange="onMultChange(event)">
+        </div>
+        ${renderSuggestions(catKey,'m1')}
+        <label class="mult-toggle">
+          <input type="checkbox" ${cfg.useM2?'checked':''} data-cat="${catKey}" onchange="onMultToggle(event)">
+          Aggiungi una seconda moltiplicazione
+        </label>
+        ${cfg.useM2?`
+        <div class="mult-row">
+          <input type="number" step="any" class="mult-input" placeholder="secondo moltiplicatore" value="${cfg.m2!==null&&cfg.m2!==undefined?cfg.m2:''}" data-cat="${catKey}" data-field="m2" onchange="onMultChange(event)">
+        </div>
+        ${renderSuggestions(catKey,'m2')}`:''}
+        <div class="mult-total"><span>Totale stimato</span><span>${fmtEuro(amount)}</span></div>
+      </div>`:''}
     </div>`;
 }
 
 function renderOvertimeBlock(summary){
-  const overtimeHours = calcOvertimeHours(summary.ordinaryHours);
+  const threshold = monthData.overtimeThreshold;
+  const overtimeHours = calcOvertimeHours(threshold, summary.ordinaryHours);
   const cfg = pay.multipliers.overtime;
   const amount = calcMultiplied(overtimeHours, cfg);
+  const isOpen = openEarningsSections.has('overtime');
   return `
     <div class="mult-block">
-      <div class="mult-title">Straordinari</div>
-      <div class="special-row"><span>Ore ordinarie del mese</span><span>${fmtHours(summary.ordinaryHours)} h</span></div>
-      <div class="mult-row">
-        <input type="number" step="1" class="mult-input" placeholder="soglia ore mensili" value="${pay.overtimeThreshold!==null&&pay.overtimeThreshold!==undefined?pay.overtimeThreshold:''}" onchange="onThresholdChange(event)">
-      </div>
-      <div class="mult-suggestions-inline">
-        <button type="button" class="mult-chip" onclick="setThreshold(165)">165 h</button>
-        <button type="button" class="mult-chip" onclick="setThreshold(85)">85 h</button>
-      </div>
-      <div class="special-row"><span>Ore eccedenti</span><span>${fmtHours(overtimeHours)} h</span></div>
-      <div class="mult-row">
-        <input type="number" step="any" class="mult-input" placeholder="moltiplicatore" value="${cfg.m1!==null&&cfg.m1!==undefined?cfg.m1:''}" data-cat="overtime" data-field="m1" onchange="onMultChange(event)">
-      </div>
-      ${renderSuggestions('overtime','m1')}
-      <div class="mult-total"><span>Totale straordinari</span><span>${fmtEuro(amount)}</span></div>
+      <button type="button" class="mult-header" onclick="toggleEarningsSection('overtime')">
+        <span class="mult-title">Straordinari</span>
+        <span class="mult-header-right"><b>${fmtEuro(amount)}</b><span class="chevron">${isOpen?'▲':'▼'}</span></span>
+      </button>
+      ${isOpen?`
+      <div class="mult-body">
+        <div class="special-row"><span>Ore ordinarie del mese</span><span>${fmtHours(summary.ordinaryHours)} h</span></div>
+        <div class="mult-row">
+          <input type="number" step="1" class="mult-input" placeholder="soglia ore di questo mese" value="${threshold!==null&&threshold!==undefined?threshold:''}" onchange="onThresholdChange(event)">
+        </div>
+        <div class="mult-suggestions-inline">
+          <button type="button" class="mult-chip" onclick="setThreshold(165)">165 h</button>
+          <button type="button" class="mult-chip" onclick="setThreshold(85)">85 h</button>
+        </div>
+        <div class="special-row"><span>Ore eccedenti</span><span>${fmtHours(overtimeHours)} h</span></div>
+        <div class="mult-row">
+          <input type="number" step="any" class="mult-input" placeholder="moltiplicatore" value="${cfg.m1!==null&&cfg.m1!==undefined?cfg.m1:''}" data-cat="overtime" data-field="m1" onchange="onMultChange(event)">
+        </div>
+        ${renderSuggestions('overtime','m1')}
+        <div class="mult-total"><span>Totale straordinari</span><span>${fmtEuro(amount)}</span></div>
+      </div>`:''}
     </div>`;
 }
 
 function renderEarningsPanel(summary){
-  const overtimeAmount = calcMultiplied(calcOvertimeHours(summary.ordinaryHours), pay.multipliers.overtime);
+  const threshold = monthData.overtimeThreshold;
+  const overtimeHours = calcOvertimeHours(threshold, summary.ordinaryHours);
+  const overtimeAmount = calcMultiplied(overtimeHours, pay.multipliers.overtime);
+  const overtimeBaseAlreadyInGross = overtimeHours * (Number(pay.hourlyRate)||0);
   const holidayAmount = calcMultiplied(summary.holidayHours, pay.multipliers.holiday);
   const sundayAmount = calcMultiplied(summary.sundayHours, pay.multipliers.sunday);
   const nightAmount = calcMultiplied(summary.nightDays, pay.multipliers.night);
   const vacationAmount = calcMultiplied(summary.vacationDays, pay.multipliers.vacation);
-  const grandTotal = summary.gross + overtimeAmount + holidayAmount + sundayAmount + nightAmount + vacationAmount;
+  // Le ore di straordinario sono gia' incluse (a tariffa normale) dentro "gross":
+  // le sottraiamo una volta a tariffa normale e le riaggiungiamo alla tariffa straordinaria,
+  // cosi' non vengono pagate due volte.
+  const grandTotal = summary.gross - overtimeBaseAlreadyInGross + overtimeAmount + holidayAmount + sundayAmount + nightAmount + vacationAmount;
 
   return `
     <h2>Guadagni — ${ITALIAN_MONTHS[viewM]} ${viewY}</h2>
@@ -1018,6 +1127,10 @@ function renderStatsPanel(){
 function renderSettingsPanel(){
   return `
     <h2>Impostazioni</h2>
+
+    <div class="section-label">Account</div>
+    <div class="special-row"><span>Accesso come</span><span>${authUser?authUser.email:'—'}</span></div>
+    <button class="icon-btn" onclick="logout()" type="button" style="margin:8px 0 4px;">🚪 Esci</button>
 
     <div class="section-label">Aspetto</div>
     <label class="mult-toggle" style="margin-bottom:14px;">
@@ -1061,7 +1174,44 @@ function renderSettingsPanel(){
   `;
 }
 
+function renderLogin(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="login-screen">
+      <div class="login-card">
+        <h1 class="login-title">Cartellino</h1>
+        <p class="login-sub">Accedi per continuare</p>
+        <form onsubmit="onLoginSubmit(event)">
+          <label class="login-field">Email
+            <input type="email" id="loginEmail" placeholder="nome@esempio.it" required>
+          </label>
+          <label class="login-field">Password
+            <input type="password" id="loginPassword" placeholder="••••••••" required>
+          </label>
+          <button type="submit" class="btn-primary" style="width:100%; margin-top:6px;">Accedi</button>
+        </form>
+        <p class="login-note">Accesso dimostrativo — per ora nessun dato viene verificato online.</p>
+      </div>
+    </div>
+  `;
+}
+window.onLoginSubmit = async function(e){
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPassword').value;
+  if(!email || !pass) return;
+  authUser = {email};
+  try{ localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(authUser)); }catch(err){}
+  render();
+};
+window.logout = function(){
+  authUser = null;
+  try{ localStorage.removeItem(STORAGE_AUTH_KEY); }catch(err){}
+  render();
+};
+
 function render(){
+  if(!authUser){ renderLogin(); return; }
   const app = document.getElementById('app');
   const summary = computeSummary();
   const nDays = daysInMonth(viewY, viewM);
@@ -1203,15 +1353,20 @@ window.toggleSuggestions = function(key){
   render();
 };
 
+window.toggleEarningsSection = function(key){
+  if(openEarningsSections.has(key)) openEarningsSections.delete(key); else openEarningsSections.add(key);
+  render();
+};
+
 window.onThresholdChange = async function(e){
   const v = e.target.value;
-  pay.overtimeThreshold = v===''?null:Number(v);
-  await saveSettings();
+  monthData.overtimeThreshold = v===''?null:Number(v);
+  await saveMonth(viewY, viewM);
   render();
 };
 window.setThreshold = async function(val){
-  pay.overtimeThreshold = val;
-  await saveSettings();
+  monthData.overtimeThreshold = val;
+  await saveMonth(viewY, viewM);
   render();
 };
 

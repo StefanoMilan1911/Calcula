@@ -35,7 +35,7 @@ body{
   padding:24px 16px 64px;
 }
 .app{
-  max-width:980px;
+  max-width:1080px;
   margin:0 auto;
 }
 .topbar{
@@ -151,7 +151,7 @@ body{
 .weekdays span{
   text-align:center;
   font-family:'IBM Plex Mono', monospace;
-  font-size:0.7rem;
+  font-size:0.76rem;
   color:var(--ink-soft);
   text-transform:uppercase;
   letter-spacing:0.05em;
@@ -159,14 +159,14 @@ body{
 .days{
   display:grid;
   grid-template-columns:repeat(7,1fr);
-  gap:6px;
+  gap:5px;
 }
 .day{
-  min-height:78px;
+  min-height:108px;
   border-radius:8px;
   border:1px solid var(--line);
   background:var(--paper);
-  padding:5px;
+  padding:4px;
   display:flex;
   flex-direction:column;
   gap:3px;
@@ -174,36 +174,54 @@ body{
 .day.empty{border:none;background:transparent;min-height:0;}
 .day .num{
   font-family:'IBM Plex Mono', monospace;
-  font-size:0.72rem;
+  font-size:0.78rem;
   color:var(--ink-soft);
 }
 .day.today .num{color:var(--amber); font-weight:700;}
-.day-shifts{
-  display:flex;
-  flex-wrap:wrap;
-  gap:3px;
+.day-shifts-fill{
   flex:1;
+  display:flex;
+  flex-direction:row;
+  border-radius:5px;
+  overflow:hidden;
+  min-height:34px;
 }
-.shift-pill{
+.shift-block{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
   font-family:'IBM Plex Mono', monospace;
   font-weight:700;
-  font-size:0.6rem;
-  padding:1px 5px;
-  border-radius:4px;
+  font-size:0.78rem;
+  text-transform:uppercase;
+  text-align:center;
   cursor:pointer;
-  line-height:1.5;
+  letter-spacing:0.01em;
   white-space:nowrap;
+  overflow:hidden;
+  padding:0 1px;
+}
+.shift-block:not(:last-child){
+  border-right:1px solid rgba(255,255,255,0.4);
 }
 .add-shift{
   width:100%;
   border:1px dashed var(--line);
   background:transparent;
   font-family:'IBM Plex Mono', monospace;
-  font-size:0.65rem;
+  font-size:0.68rem;
   color:var(--ink-soft);
   border-radius:5px;
-  padding:1px 2px;
+  padding:2px 2px;
   cursor:pointer;
+}
+@media (max-width:480px){
+  body{padding:20px 8px 56px;}
+  .days{gap:4px;}
+  .day{padding:3px; min-height:100px;}
+  .day .num{font-size:0.7rem;}
 }
 .add-shift:focus{outline:2px solid var(--amber); outline-offset:1px;}
 
@@ -264,24 +282,6 @@ body{
   width:calc(100% - 18px);
 }
 .net-input::placeholder{color:#6E7E7A; font-size:0.9rem;}
-.punchcard hr{
-  border:none;
-  border-top:1px dashed #445561;
-  margin:14px 18px 14px 18px;
-}
-.breakdown{
-  margin-left:18px;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-}
-.breakdown .b-row{
-  display:flex;
-  justify-content:space-between;
-  font-family:'IBM Plex Mono', monospace;
-  font-size:0.78rem;
-  color:#C7D0CD;
-}
 
 /* settings panel */
 .overlay{
@@ -415,23 +415,6 @@ body{
   text-transform:uppercase;
   letter-spacing:0.06em;
 }
-.bar-row{
-  display:grid;
-  grid-template-columns:70px 1fr 46px;
-  align-items:center;
-  gap:10px;
-  margin-bottom:8px;
-  font-family:'IBM Plex Mono', monospace;
-  font-size:0.75rem;
-}
-.bar-track{
-  background:var(--paper);
-  border-radius:6px;
-  height:10px;
-  overflow:hidden;
-}
-.bar-fill{height:100%; border-radius:6px;}
-
 .special-row{
   display:flex;
   justify-content:space-between;
@@ -754,10 +737,10 @@ window.importBackup = importBackup;
 function typeById(id){ return types.find(t=>t.id===id); }
 
 function computeSummary(){
-  let totalHours = 0;
-  let byType = {};
+  let ordinaryHours = 0;
   let holidayHours = 0, sundayHours = 0;
   let vacationDays = new Set();
+  let nightDays = new Set();
 
   Object.entries(monthData.shifts).forEach(([day,list])=>{
     const d = Number(day);
@@ -769,23 +752,21 @@ function computeSummary(){
       const t = typeById(id);
       if(!t) return;
       const hrs = Number(t.hours)||0;
-      const isVacationType = t.code && t.code.trim().toUpperCase()==='F';
-      if(isVacationType){
+      const code = (t.code||'').trim().toUpperCase();
+
+      if(code==='N') nightDays.add(day);
+
+      if(code==='F'){
         vacationDays.add(day);
         return; // conta solo come giorno di ferie, non ore/soldi
       }
-      if(isHoliday){
-        holidayHours += hrs;
-        return; // festivo: paga diversa, conteggiato a parte
-      }
-      if(isSunday){
-        sundayHours += hrs;
-        return; // domenicale: paga diversa, conteggiato a parte
-      }
-      totalHours += hrs;
-      byType[id] = (byType[id]||0) + hrs;
+      if(isHoliday){ holidayHours += hrs; }
+      else if(isSunday){ sundayHours += hrs; }
+      else { ordinaryHours += hrs; }
     });
   });
+
+  const totalHours = ordinaryHours + holidayHours + sundayHours;
 
   let holidayExtra = 0, sundayExtra = 0;
   Object.entries(monthData.extra||{}).forEach(([day,v])=>{
@@ -797,8 +778,8 @@ function computeSummary(){
     else if(isSunday) sundayExtra += val;
   });
 
-  const gross = totalHours * (Number(pay.hourlyRate)||0);
-  return {totalHours, gross, holidayHours, sundayHours, holidayExtra, sundayExtra, vacationDays: vacationDays.size, net: monthData.net, byType};
+  const gross = ordinaryHours * (Number(pay.hourlyRate)||0);
+  return {totalHours, gross, holidayHours, sundayHours, holidayExtra, sundayExtra, vacationDays: vacationDays.size, nightDays: nightDays.size, net: monthData.net};
 }
 
 function fmtEuro(n){
@@ -850,10 +831,12 @@ function render(){
   for(let i=0;i<startOffset;i++){ dayCells += `<div class="day empty"></div>`; }
   for(let d=1; d<=nDays; d++){
     const assigned = monthData.shifts[d] || [];
-    const pills = assigned.map((id,idx)=>{
+    const longestCode = Math.max(0, ...assigned.map(id=>{ const t=typeById(id); return t?t.code.length:0; }));
+    const blockFontSize = assigned.length>=3 ? '0.6rem' : (assigned.length===2 && longestCode>1) ? '0.66rem' : '0.78rem';
+    const blocks = assigned.map((id,idx)=>{
       const t = typeById(id);
       if(!t) return '';
-      return `<span class="shift-pill" style="background:${hexToSoftBg(t.color)};color:${t.color};" onclick="removeShift(${d},${idx})" title="Rimuovi ${t.label}">${t.code}</span>`;
+      return `<div class="shift-block" style="background:${t.color}; font-size:${blockFontSize};" onclick="removeShift(${d},${idx})" title="Rimuovi ${t.label}">${t.code}</div>`;
     }).join('');
     const options = `<option value="">+</option>` + types.map(t=>`<option value="${t.id}">${t.code}</option>`).join('');
     const isSunday = new Date(viewY, viewM, d).getDay()===0;
@@ -863,32 +846,13 @@ function render(){
     dayCells += `
       <div class="day ${isToday(d)?'today':''} ${isSpecial?'special':''}">
         <span class="num">${d}${isSpecial?`<span class="holiday-dot" title="${holidayName||'Domenica'}"></span>`:''}</span>
-        <div class="day-shifts">${pills}</div>
+        <div class="day-shifts-fill">${blocks}</div>
         <select class="add-shift" data-day="${d}" onchange="addShift(event)">${options}</select>
         ${isSpecial?`<input type="number" step="0.01" class="extra-input" data-day="${d}" placeholder="+ €" value="${extraVal!==undefined?extraVal:''}" onchange="onExtraChange(event)">`:''}
       </div>`;
   }
 
   const legend = types.map(t=>`<span class="chip" style="background:${hexToSoftBg(t.color)};color:${t.color};border-color:${t.color}44;">${t.code} · ${t.hours}h</span>`).join('');
-
-  const breakdown = Object.keys(summary.byType).length
-    ? Object.entries(summary.byType).map(([id,h])=>{
-        const t = typeById(id);
-        return `<div class="b-row"><span>${t?t.label:id}</span><span>${fmtHours(h)} h</span></div>`;
-      }).join('')
-    : `<div class="b-row" style="opacity:0.6;">Nessun turno inserito</div>`;
-
-  const maxTypeHours = Math.max(1, ...Object.values(summary.byType));
-  const statBars = types.map(t=>{
-    const h = summary.byType[t.id] || 0;
-    const pct = Math.round((h/maxTypeHours)*100);
-    return `
-      <div class="bar-row">
-        <span>${t.code}</span>
-        <div class="bar-track"><div class="bar-fill" style="width:${h?pct:0}%; background:${t.color};"></div></div>
-        <span style="text-align:right;">${fmtHours(h)}h</span>
-      </div>`;
-  }).join('');
 
   app.innerHTML = `
     ${shouldShowBackupReminder() ? `
@@ -936,13 +900,6 @@ function render(){
             <div class="k">Netto reale del mese</div>
             <input type="number" step="0.01" class="net-input" id="netInput" placeholder="Inserisci l'importo" value="${summary.net===null||summary.net===undefined?'':summary.net}" onchange="onNetChange(event)">
           </div>
-          <hr>
-          <div class="breakdown">${breakdown}</div>
-        </div>
-
-        <div class="stats-card">
-          <h3>Ore per turno</h3>
-          ${statBars}
         </div>
 
         <div class="stats-card">
@@ -954,6 +911,7 @@ function render(){
           <div class="special-row"><span>Ore</span><span>${fmtHours(summary.sundayHours)} h</span></div>
           <div class="special-row"><span>Extra</span><span>${fmtEuro(summary.sundayExtra)}</span></div>
           <div class="special-row special-row-sep"><span>Giorni di ferie</span><span>${summary.vacationDays} gg</span></div>
+          <div class="special-row"><span>Giorni di notte</span><span>${summary.nightDays} gg</span></div>
         </div>
 
         <div class="stats-card">

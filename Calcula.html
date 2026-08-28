@@ -422,6 +422,13 @@ body{
   border-bottom:1px dashed var(--line);
 }
 .mult-block:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0;}
+.mult-title{
+  font-family:'Space Grotesk', sans-serif;
+  font-weight:700;
+  font-size:1.02rem;
+  color:var(--ink);
+  margin-bottom:8px;
+}
 .mult-row{
   display:flex;
   gap:8px;
@@ -435,12 +442,7 @@ body{
   font-family:'IBM Plex Mono', monospace;
   font-size:0.85rem;
 }
-.mult-suggestions{
-  display:flex;
-  gap:4px;
-  flex-wrap:wrap;
-  margin-bottom:4px;
-}
+.mult-suggestions-inline{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;}
 .mult-chip{
   border:1px solid var(--line);
   background:var(--paper);
@@ -452,6 +454,41 @@ body{
   color:var(--ink-soft);
 }
 .mult-chip:hover{border-color:var(--amber); color:var(--amber);}
+.suggestions-toggle{
+  border:1px solid var(--line);
+  background:var(--paper);
+  border-radius:6px;
+  padding:4px 9px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.7rem;
+  color:var(--ink-soft);
+  cursor:pointer;
+  margin-bottom:6px;
+}
+.suggestions-list{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin-bottom:10px;
+}
+.suggestion-item{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border:1px solid var(--line);
+  background:var(--paper);
+  border-radius:6px;
+  padding:7px 10px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.78rem;
+  color:var(--ink);
+  cursor:pointer;
+  width:100%;
+  text-align:left;
+}
+.suggestion-item:hover{border-color:var(--amber);}
+.suggestion-value{font-weight:700;}
+.suggestion-label{color:var(--ink-soft); text-transform:capitalize;}
 .mult-toggle{
   display:flex;
   align-items:center;
@@ -536,6 +573,17 @@ body{
   font-family:'IBM Plex Mono', monospace;
   font-size:0.85rem;
 }
+
+body.dark{
+  --ink:#E8ECEE;
+  --ink-soft:#93A2A9;
+  --paper:#12181F;
+  --paper-raised:#1C242D;
+  --line:#2E3941;
+  --amber-soft:#4A3A22;
+  --teal-soft:#1E362E;
+  --rust-soft:#3B2725;
+}
 </style>
 </head>
 <body>
@@ -549,11 +597,18 @@ const STORAGE_PAY_KEY = 'pay-config';
 const STORAGE_LASTBACKUP_KEY = 'last-backup-at';
 const STORAGE_FIRSTUSE_KEY = 'first-use-at';
 const STORAGE_SNOOZE_KEY = 'backup-snooze-until';
+const STORAGE_DARKMODE_KEY = 'dark-mode';
 const BACKUP_REMINDER_DAYS = 30;
 const SNOOZE_DAYS = 7;
 const monthKey = (y,m)=>`month-${y}-${String(m+1).padStart(2,'0')}`;
 
-const MULT_SUGGESTIONS = [9.26958, 58.82615, 12.39, 1.44642];
+const MULT_LEGEND = [
+  {value:11.08921, label:'straordinari'},
+  {value:12.39, label:'notte'},
+  {value:58.82615, label:'ferie'},
+  {value:1.44642, label:'domenica e festivi'},
+  {value:9.26958, label:'festivi'},
+];
 
 const DEFAULT_TYPES = [
   {id:'M', code:'M', label:'Mattino', hours:6, color:'#3E7C6B'},
@@ -566,7 +621,9 @@ const DEFAULT_TYPES = [
 function defaultPay(){
   return {
     hourlyRate: 10,
+    overtimeThreshold: null,
     multipliers: {
+      overtime: {m1:null, m2:null, useM2:false},
       holiday: {m1:null, m2:null, useM2:false},
       sunday: {m1:null, m2:null, useM2:false},
       night: {m1:null, m2:null, useM2:false},
@@ -583,6 +640,8 @@ let viewM = today.getMonth();
 let monthData = {shifts:{}, net:null, extra:{}};
 let editMode = false;
 let activePanel = null; // 'settings' | 'stats' | 'earnings' | null
+let darkMode = false;
+let openSuggestionKeys = new Set();
 
 const ITALIAN_MONTHS = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
 const ITALIAN_MONTHS_SHORT = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
@@ -641,6 +700,7 @@ async function loadSettings(){
     if(p){
       const parsed = JSON.parse(p);
       if(parsed.hourlyRate!==undefined) pay.hourlyRate = parsed.hourlyRate;
+      if(parsed.overtimeThreshold!==undefined) pay.overtimeThreshold = parsed.overtimeThreshold;
       if(parsed.multipliers){
         Object.keys(pay.multipliers).forEach(k=>{
           if(parsed.multipliers[k]) pay.multipliers[k] = {...pay.multipliers[k], ...parsed.multipliers[k]};
@@ -648,6 +708,15 @@ async function loadSettings(){
       }
     }
   }catch(e){}
+  try{
+    darkMode = localStorage.getItem(STORAGE_DARKMODE_KEY) === '1';
+  }catch(e){ darkMode = false; }
+  applyDarkModeClass();
+}
+function applyDarkModeClass(){
+  document.body.classList.toggle('dark', darkMode);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute('content', darkMode ? '#12181F' : '#1C2B39');
 }
 async function saveSettings(){
   try{
@@ -845,19 +914,35 @@ function getStoredNet(y,m){
   }catch(e){ return null; }
 }
 
+function calcOvertimeHours(ordinaryHours){
+  const threshold = pay.overtimeThreshold;
+  if(threshold===null || threshold===undefined || threshold==='') return 0;
+  return Math.max(0, ordinaryHours - Number(threshold));
+}
+
+function renderSuggestions(catKey, field){
+  const key = `${catKey}_${field}`;
+  const isOpen = openSuggestionKeys.has(key);
+  return `
+    <button type="button" class="suggestions-toggle" onclick="toggleSuggestions('${key}')">${isOpen?'▲':'▼'} suggerimenti</button>
+    ${isOpen ? `
+    <div class="suggestions-list">
+      ${MULT_LEGEND.map(item=>`<button type="button" class="suggestion-item" onclick="setMult('${catKey}','${field}',${item.value})"><span class="suggestion-value">×${item.value}</span><span class="suggestion-label">${item.label}</span></button>`).join('')}
+    </div>` : ''}
+  `;
+}
+
 function renderMultBlock(catKey, label, qty, unitLabel, unitSuffix){
   const cfg = pay.multipliers[catKey];
   const amount = calcMultiplied(qty, cfg);
-  const chipsHtml = MULT_SUGGESTIONS.map(s=>`<button type="button" class="mult-chip" onclick="setMult('${catKey}','m1',${s})">×${s}</button>`).join('');
-  const chips2Html = MULT_SUGGESTIONS.map(s=>`<button type="button" class="mult-chip" onclick="setMult('${catKey}','m2',${s})">×${s}</button>`).join('');
   return `
     <div class="mult-block">
-      <div class="section-label">${label}</div>
+      <div class="mult-title">${label}</div>
       <div class="special-row"><span>${unitLabel}</span><span>${fmtHours(qty)} ${unitSuffix}</span></div>
       <div class="mult-row">
         <input type="number" step="any" class="mult-input" placeholder="moltiplicatore" value="${cfg.m1!==null&&cfg.m1!==undefined?cfg.m1:''}" data-cat="${catKey}" data-field="m1" onchange="onMultChange(event)">
       </div>
-      <div class="mult-suggestions">${chipsHtml}</div>
+      ${renderSuggestions(catKey,'m1')}
       <label class="mult-toggle">
         <input type="checkbox" ${cfg.useM2?'checked':''} data-cat="${catKey}" onchange="onMultToggle(event)">
         Aggiungi una seconda moltiplicazione
@@ -866,29 +951,55 @@ function renderMultBlock(catKey, label, qty, unitLabel, unitSuffix){
       <div class="mult-row">
         <input type="number" step="any" class="mult-input" placeholder="secondo moltiplicatore" value="${cfg.m2!==null&&cfg.m2!==undefined?cfg.m2:''}" data-cat="${catKey}" data-field="m2" onchange="onMultChange(event)">
       </div>
-      <div class="mult-suggestions">${chips2Html}</div>`:''}
+      ${renderSuggestions(catKey,'m2')}`:''}
       <div class="mult-total"><span>Totale stimato</span><span>${fmtEuro(amount)}</span></div>
     </div>`;
 }
 
+function renderOvertimeBlock(summary){
+  const overtimeHours = calcOvertimeHours(summary.ordinaryHours);
+  const cfg = pay.multipliers.overtime;
+  const amount = calcMultiplied(overtimeHours, cfg);
+  return `
+    <div class="mult-block">
+      <div class="mult-title">Straordinari</div>
+      <div class="special-row"><span>Ore ordinarie del mese</span><span>${fmtHours(summary.ordinaryHours)} h</span></div>
+      <div class="mult-row">
+        <input type="number" step="1" class="mult-input" placeholder="soglia ore mensili" value="${pay.overtimeThreshold!==null&&pay.overtimeThreshold!==undefined?pay.overtimeThreshold:''}" onchange="onThresholdChange(event)">
+      </div>
+      <div class="mult-suggestions-inline">
+        <button type="button" class="mult-chip" onclick="setThreshold(165)">165 h</button>
+        <button type="button" class="mult-chip" onclick="setThreshold(85)">85 h</button>
+      </div>
+      <div class="special-row"><span>Ore eccedenti</span><span>${fmtHours(overtimeHours)} h</span></div>
+      <div class="mult-row">
+        <input type="number" step="any" class="mult-input" placeholder="moltiplicatore" value="${cfg.m1!==null&&cfg.m1!==undefined?cfg.m1:''}" data-cat="overtime" data-field="m1" onchange="onMultChange(event)">
+      </div>
+      ${renderSuggestions('overtime','m1')}
+      <div class="mult-total"><span>Totale straordinari</span><span>${fmtEuro(amount)}</span></div>
+    </div>`;
+}
+
 function renderEarningsPanel(summary){
+  const overtimeAmount = calcMultiplied(calcOvertimeHours(summary.ordinaryHours), pay.multipliers.overtime);
   const holidayAmount = calcMultiplied(summary.holidayHours, pay.multipliers.holiday);
   const sundayAmount = calcMultiplied(summary.sundayHours, pay.multipliers.sunday);
   const nightAmount = calcMultiplied(summary.nightDays, pay.multipliers.night);
   const vacationAmount = calcMultiplied(summary.vacationDays, pay.multipliers.vacation);
-  const grandTotal = summary.gross + holidayAmount + sundayAmount + nightAmount + vacationAmount;
+  const grandTotal = summary.gross + overtimeAmount + holidayAmount + sundayAmount + nightAmount + vacationAmount;
 
   return `
     <h2>Guadagni — ${ITALIAN_MONTHS[viewM]} ${viewY}</h2>
     <div class="section-label">Riepilogo mese</div>
     <div class="special-row"><span>Ore totali</span><span>${fmtHours(summary.totalHours)} h</span></div>
     <div class="special-row"><span>Lordo (ore ordinarie)</span><span>${fmtEuro(summary.gross)}</span></div>
-    <div class="special-row" style="color:var(--ink-soft); font-size:0.72rem; padding-top:0;">+ maggiorazioni festivi / domenicali / notte / ferie (dettaglio sotto)</div>
+    <div class="special-row" style="color:var(--ink-soft); font-size:0.72rem; padding-top:0;">+ straordinari / festivi / domenicali / notte / ferie (dettaglio sotto)</div>
     <div class="mult-total" style="font-size:1rem; margin-top:10px;"><span>Totale mese stimato</span><span>${fmtEuro(grandTotal)}</span></div>
     <div style="margin:16px 0 20px;">
       <div class="section-label" style="margin:0 0 6px;">Netto reale del mese</div>
       <input type="number" step="0.01" class="net-input-light" id="netInput" placeholder="Inserisci l'importo" value="${summary.net===null||summary.net===undefined?'':summary.net}" onchange="onNetChange(event)">
     </div>
+    ${renderOvertimeBlock(summary)}
     ${renderMultBlock('holiday','Festivi', summary.holidayHours, 'Ore', 'h')}
     ${renderMultBlock('sunday','Domenicali', summary.sundayHours, 'Ore', 'h')}
     ${renderMultBlock('night','Notte', summary.nightDays, 'Giorni', 'gg')}
@@ -907,6 +1018,13 @@ function renderStatsPanel(){
 function renderSettingsPanel(){
   return `
     <h2>Impostazioni</h2>
+
+    <div class="section-label">Aspetto</div>
+    <label class="mult-toggle" style="margin-bottom:14px;">
+      <input type="checkbox" ${darkMode?'checked':''} onchange="toggleDarkMode(event)">
+      🌙 Modalità scura
+    </label>
+
     <div class="section-label">Paga oraria (per il lordo stimato)</div>
     <div class="pay-row">
       <label>Paga oraria lorda (€)
@@ -1078,6 +1196,29 @@ window.setMult = async function(cat, field, val){
   pay.multipliers[cat][field] = val;
   await saveSettings();
   render();
+};
+
+window.toggleSuggestions = function(key){
+  if(openSuggestionKeys.has(key)) openSuggestionKeys.delete(key); else openSuggestionKeys.add(key);
+  render();
+};
+
+window.onThresholdChange = async function(e){
+  const v = e.target.value;
+  pay.overtimeThreshold = v===''?null:Number(v);
+  await saveSettings();
+  render();
+};
+window.setThreshold = async function(val){
+  pay.overtimeThreshold = val;
+  await saveSettings();
+  render();
+};
+
+window.toggleDarkMode = async function(e){
+  darkMode = e.target.checked;
+  try{ localStorage.setItem(STORAGE_DARKMODE_KEY, darkMode ? '1' : '0'); }catch(err){}
+  applyDarkModeClass();
 };
 
 window.changeMonth = async function(delta){

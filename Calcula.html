@@ -1688,9 +1688,18 @@ function render(){
     </div>` : ''}
   `;
 
-  window.scrollTo(0, prevWin);
-  const newOverlay = document.querySelector('.overlay');
-  if(newOverlay) newOverlay.scrollTop = prevOverlayTop;
+  // il ripristino deve avvenire dopo che il browser ha ridisegnato,
+  // altrimenti l'altezza non e' ancora quella definitiva e lo scorrimento salta
+  const restoreScroll = ()=>{
+    const ov = document.querySelector('.overlay');
+    if(ov) ov.scrollTop = prevOverlayTop;
+    window.scrollTo(0, prevWin);
+  };
+  restoreScroll();
+  requestAnimationFrame(()=>{
+    restoreScroll();
+    requestAnimationFrame(restoreScroll);
+  });
 }
 
 // Controlla se lo stesso turno e' gia' inserito in un'altra struttura in quel giorno.
@@ -1719,6 +1728,20 @@ function findConflictInOtherStructures(day, typeId){
     }catch(err){}
   }
   return null;
+}
+
+// Aggiorna solo il contenuto del pannello aperto: il contenitore che scorre
+// resta lo stesso, quindi la posizione di scorrimento non si perde.
+function renderPanelBody(){
+  const panel = document.querySelector('.panel');
+  if(!panel || !activePanel){ render(); return; }
+  const summary = activeStructureId === GENERAL_ID ? null : computeSummary();
+  panel.innerHTML = `
+    <button class="close" onclick="closePanel()">×</button>
+    ${activePanel==='settings' ? renderSettingsPanel() : ''}
+    ${activePanel==='stats' ? renderStatsPanel() : ''}
+    ${activePanel==='earnings' ? renderEarningsPanel(summary) : ''}
+  `;
 }
 
 window.addShift = async function(e){
@@ -1819,13 +1842,13 @@ window.addDepartment = function(){
   const palette = ['#3E7C6B','#D98E3D','#B85450','#5C7FA6','#7A5C9E','#4A8C5F'];
   departments.push({id:'d'+Date.now(), name:name.trim(), color:palette[departments.length % palette.length]});
   saveDepartments();
-  render();
+  renderPanelBody();
 };
 window.updateDepartment = function(idx, field, value){
   if(!departments[idx]) return;
   departments[idx][field] = value;
   saveDepartments();
-  render();
+  renderPanelBody();
 };
 window.removeDepartment = function(idx){
   const dp = departments[idx];
@@ -1834,7 +1857,7 @@ window.removeDepartment = function(idx){
   departments.splice(idx,1);
   saveDepartments();
   if(deptFilter===dp.id) deptFilter = null;
-  render();
+  renderPanelBody();
 };
 
 window.toggleEditMode = function(){
@@ -1846,14 +1869,14 @@ window.onTaxesChange = async function(e){
   const v = e.target.value;
   monthData.taxes = (v===''? null : Number(v));
   await saveMonth(viewY, viewM);
-  render();
+  renderPanelBody();
 };
 
 window.onNetChange = async function(e){
   const v = e.target.value;
   monthData.net = (v===''? null : Number(v));
   await saveMonth(viewY, viewM);
-  render();
+  renderPanelBody();
 };
 
 window.onMultChange = async function(e){
@@ -1862,40 +1885,40 @@ window.onMultChange = async function(e){
   const v = e.target.value;
   pay.multipliers[cat][field] = v===''?null:Number(v);
   await saveSettings();
-  render();
+  renderPanelBody();
 };
 window.onMultToggle = async function(e){
   const cat = e.target.dataset.cat;
   pay.multipliers[cat].useM2 = e.target.checked;
   await saveSettings();
-  render();
+  renderPanelBody();
 };
 window.setMult = async function(cat, field, val){
   pay.multipliers[cat][field] = val;
   await saveSettings();
-  render();
+  renderPanelBody();
 };
 
 window.toggleSuggestions = function(key){
   if(openSuggestionKeys.has(key)) openSuggestionKeys.delete(key); else openSuggestionKeys.add(key);
-  render();
+  renderPanelBody();
 };
 
 window.toggleEarningsSection = function(key){
   if(openEarningsSections.has(key)) openEarningsSections.delete(key); else openEarningsSections.add(key);
-  render();
+  renderPanelBody();
 };
 
 window.onThresholdChange = async function(e){
   const v = e.target.value;
   monthData.overtimeThreshold = v===''?null:Number(v);
   await saveMonth(viewY, viewM);
-  render();
+  renderPanelBody();
 };
 window.setThreshold = async function(val){
   monthData.overtimeThreshold = val;
   await saveMonth(viewY, viewM);
-  render();
+  renderPanelBody();
 };
 
 window.toggleDarkMode = async function(e){
@@ -1924,7 +1947,7 @@ window.closePanel = function(){
 let draftTypes = null;
 window.toggleColorPicker = function(key){
   openColorPicker = (openColorPicker === key) ? null : key;
-  render();
+  renderPanelBody();
 };
 window.pickColor = async function(kind, idx, hex){
   openColorPicker = null;
@@ -1944,7 +1967,7 @@ window.updateTypeColor = async function(idx, value){
   draftTypes[idx].color = value;
   types = draftTypes;
   await saveSettings();
-  render();
+  renderPanelBody();
 };
 
 window.updateType = function(idx, field, value){

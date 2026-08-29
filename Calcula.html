@@ -648,6 +648,103 @@ body{
   margin-top:16px;
 }
 
+.structure-tabs{
+  display:flex;
+  gap:6px;
+  margin-bottom:12px;
+  flex-wrap:wrap;
+}
+.structure-tab{
+  border:1px solid var(--line);
+  background:var(--paper-raised);
+  border-radius:999px;
+  padding:7px 14px;
+  font-family:'IBM Plex Sans', sans-serif;
+  font-size:0.82rem;
+  color:var(--ink-soft);
+  cursor:pointer;
+}
+.structure-tab.active{
+  background:var(--ink);
+  color:var(--paper);
+  border-color:var(--ink);
+  font-weight:600;
+}
+.dept-filter{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}
+.dept-chip{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  border:1px solid var(--line);
+  background:var(--paper);
+  border-radius:999px;
+  padding:5px 11px;
+  font-size:0.76rem;
+  font-family:'IBM Plex Sans', sans-serif;
+  color:var(--ink-soft);
+  cursor:pointer;
+}
+.dept-chip.active{
+  border-color:var(--amber);
+  color:var(--ink);
+  font-weight:600;
+}
+.dept-dot{
+  display:inline-block;
+  width:7px;height:7px;
+  border-radius:50%;
+  flex-shrink:0;
+}
+.shift-block .dept-dot{
+  margin-left:4px;
+  border:1px solid rgba(255,255,255,0.7);
+}
+.struct-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:7px 0;
+  border-bottom:1px dashed var(--line);
+  font-size:0.85rem;
+}
+.struct-name em{color:var(--amber); font-style:normal; font-size:0.72rem;}
+.mini-btn{
+  border:1px solid var(--line);
+  background:transparent;
+  border-radius:6px;
+  padding:3px 8px;
+  font-size:0.7rem;
+  cursor:pointer;
+  color:var(--ink-soft);
+  margin-left:4px;
+}
+.mini-btn.danger{color:var(--rust); border-color:var(--rust);}
+.dept-row{
+  display:grid;
+  grid-template-columns:28px 1fr 24px;
+  gap:8px;
+  align-items:center;
+  margin-bottom:8px;
+}
+.dept-row input[type=color]{
+  width:28px;height:28px;padding:0;border:none;border-radius:6px;cursor:pointer;background:none;
+}
+.dept-row input[type=text]{
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:6px 8px;
+  font-size:0.85rem;
+  font-family:'IBM Plex Sans', sans-serif;
+  width:100%;
+}
+
 body.dark{
   --ink:#E8ECEE;
   --ink-soft:#93A2A9;
@@ -666,16 +763,22 @@ body.dark{
 </div>
 
 <script>
-const STORAGE_TYPES_KEY = 'shift-types';
-const STORAGE_PAY_KEY = 'pay-config';
 const STORAGE_LASTBACKUP_KEY = 'last-backup-at';
 const STORAGE_FIRSTUSE_KEY = 'first-use-at';
 const STORAGE_SNOOZE_KEY = 'backup-snooze-until';
 const STORAGE_DARKMODE_KEY = 'dark-mode';
 const STORAGE_AUTH_KEY = 'fake-auth-user';
+const STORAGE_STRUCTURES_KEY = 'structures';
+const GENERAL_ID = '__all__';
 const BACKUP_REMINDER_DAYS = 30;
 const SNOOZE_DAYS = 7;
-const monthKey = (y,m)=>`month-${y}-${String(m+1).padStart(2,'0')}`;
+
+// Chiavi separate per ogni struttura, cosi' ogni sede ha turni/impostazioni propri.
+const typesKey = (sid)=>`shift-types:${sid}`;
+const payKey = (sid)=>`pay-config:${sid}`;
+const deptsKey = (sid)=>`departments:${sid}`;
+const monthKeyFor = (sid,y,m)=>`month:${sid}:${y}-${String(m+1).padStart(2,'0')}`;
+const monthKey = (y,m)=>monthKeyFor(activeStructureId,y,m);
 
 const MULT_LEGEND = [
   {value:11.08921, label:'straordinari'},
@@ -708,6 +811,10 @@ function defaultPay(){
 
 let types = DEFAULT_TYPES;
 let pay = defaultPay();
+let structures = [];
+let activeStructureId = null;
+let departments = [];
+let deptFilter = null;   // id reparto da mostrare, null = tutti
 let today = new Date();
 let viewY = today.getFullYear();
 let viewM = today.getMonth();
@@ -765,14 +872,65 @@ function getHolidayName(y,m,d){
   return getHolidaySet(y)[`${m}-${d}`] || null;
 }
 
-async function loadSettings(){
+// Sposta i dati del vecchio formato (senza strutture) dentro la prima struttura.
+function migrateLegacyData(){
   try{
-    const t = localStorage.getItem(STORAGE_TYPES_KEY);
+    if(localStorage.getItem(STORAGE_STRUCTURES_KEY)) return; // gia' migrato
+    const sid = 's1';
+    const legacyTypes = localStorage.getItem('shift-types');
+    const legacyPay = localStorage.getItem('pay-config');
+    if(legacyTypes){ localStorage.setItem(typesKey(sid), legacyTypes); localStorage.removeItem('shift-types'); }
+    if(legacyPay){ localStorage.setItem(payKey(sid), legacyPay); localStorage.removeItem('pay-config'); }
+    const legacyMonths = [];
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(k && /^month-\d{4}-\d{2}$/.test(k)) legacyMonths.push(k);
+    }
+    legacyMonths.forEach(k=>{
+      const ym = k.substring('month-'.length);
+      localStorage.setItem(`month:${sid}:${ym}`, localStorage.getItem(k));
+      localStorage.removeItem(k);
+    });
+    localStorage.setItem(STORAGE_STRUCTURES_KEY, JSON.stringify([{id:sid, name:'Struttura 1'}]));
+  }catch(e){ console.error('Migrazione non riuscita', e); }
+}
+
+function loadStructures(){
+  try{
+    const s = localStorage.getItem(STORAGE_STRUCTURES_KEY);
+    structures = s ? JSON.parse(s) : [];
+  }catch(e){ structures = []; }
+  if(!structures.length){
+    structures = [{id:'s1', name:'Struttura 1'}];
+    saveStructures();
+  }
+  if(!activeStructureId || !structures.some(s=>s.id===activeStructureId)){
+    activeStructureId = structures[0].id;
+  }
+}
+function saveStructures(){
+  try{ localStorage.setItem(STORAGE_STRUCTURES_KEY, JSON.stringify(structures)); }catch(e){}
+}
+
+function loadDepartments(){
+  try{
+    const d = localStorage.getItem(deptsKey(activeStructureId));
+    departments = d ? JSON.parse(d) : [];
+  }catch(e){ departments = []; }
+}
+function saveDepartments(){
+  try{ localStorage.setItem(deptsKey(activeStructureId), JSON.stringify(departments)); }catch(e){}
+}
+
+async function loadSettings(){
+  types = JSON.parse(JSON.stringify(DEFAULT_TYPES));
+  try{
+    const t = localStorage.getItem(typesKey(activeStructureId));
     if(t) types = JSON.parse(t);
   }catch(e){}
   pay = defaultPay();
   try{
-    const p = localStorage.getItem(STORAGE_PAY_KEY);
+    const p = localStorage.getItem(payKey(activeStructureId));
     if(p){
       const parsed = JSON.parse(p);
       if(parsed.hourlyRate!==undefined) pay.hourlyRate = parsed.hourlyRate;
@@ -783,6 +941,7 @@ async function loadSettings(){
       }
     }
   }catch(e){}
+  loadDepartments();
   try{
     darkMode = localStorage.getItem(STORAGE_DARKMODE_KEY) === '1';
   }catch(e){ darkMode = false; }
@@ -799,22 +958,65 @@ function applyDarkModeClass(){
 }
 async function saveSettings(){
   try{
-    localStorage.setItem(STORAGE_TYPES_KEY, JSON.stringify(types));
-    localStorage.setItem(STORAGE_PAY_KEY, JSON.stringify(pay));
+    localStorage.setItem(typesKey(activeStructureId), JSON.stringify(types));
+    localStorage.setItem(payKey(activeStructureId), JSON.stringify(pay));
   }catch(e){ console.error('Errore salvataggio impostazioni', e); }
+}
+
+// Le voci vecchie erano semplici stringhe (id turno); ora {t:idTurno, d:idReparto}.
+// Raccoglie i turni di tutte le strutture per il mese corrente (vista sola lettura).
+function buildGeneralDayMap(y,m){
+  const map = {};
+  structures.forEach(s=>{
+    let sTypes = DEFAULT_TYPES, sDepts = [];
+    try{
+      const t = localStorage.getItem(typesKey(s.id));
+      if(t) sTypes = JSON.parse(t);
+    }catch(e){}
+    try{
+      const d = localStorage.getItem(deptsKey(s.id));
+      if(d) sDepts = JSON.parse(d);
+    }catch(e){}
+    let sMonth = null;
+    try{
+      const raw = localStorage.getItem(monthKeyFor(s.id, y, m));
+      if(raw) sMonth = normalizeMonthData(JSON.parse(raw));
+    }catch(e){}
+    if(!sMonth) return;
+    Object.entries(sMonth.shifts).forEach(([day,list])=>{
+      list.forEach(entry=>{
+        const t = sTypes.find(x=>x.id===entry.t);
+        if(!t) return;
+        const dp = sDepts.find(x=>x.id===entry.d);
+        if(!map[day]) map[day] = [];
+        map[day].push({
+          code: t.code, color: t.color, label: t.label,
+          structureName: s.name,
+          deptName: dp?dp.name:null, deptColor: dp?dp.color:null
+        });
+      });
+    });
+  });
+  return map;
+}
+
+function normalizeShiftEntry(v){
+  if(typeof v === 'string') return {t:v, d:null};
+  if(v && typeof v === 'object') return {t:v.t, d:(v.d===undefined?null:v.d)};
+  return {t:null, d:null};
 }
 
 function normalizeMonthData(parsed){
   if(parsed && typeof parsed==='object' && parsed.shifts){
     const shifts = {};
-    Object.entries(parsed.shifts).forEach(([d,v])=>{ shifts[d] = Array.isArray(v)?v:[v]; });
+    Object.entries(parsed.shifts).forEach(([d,v])=>{ shifts[d] = (Array.isArray(v)?v:[v]).map(normalizeShiftEntry); });
     const extra = {};
     if(parsed.extra) Object.entries(parsed.extra).forEach(([d,v])=>{ extra[d] = Number(v); });
     return {shifts, net: (parsed.net===undefined?null:parsed.net), extra, overtimeThreshold: (parsed.overtimeThreshold===undefined?null:parsed.overtimeThreshold), taxes: (parsed.taxes===undefined?null:parsed.taxes)};
   }
   if(parsed && typeof parsed==='object'){
     const shifts = {};
-    Object.entries(parsed).forEach(([d,v])=>{ shifts[d] = Array.isArray(v)?v:[v]; });
+    Object.entries(parsed).forEach(([d,v])=>{ shifts[d] = (Array.isArray(v)?v:[v]).map(normalizeShiftEntry); });
     return {shifts, net:null, extra:{}, overtimeThreshold:null, taxes:null};
   }
   return {shifts:{}, net:null, extra:{}, overtimeThreshold:null, taxes:null};
@@ -836,7 +1038,7 @@ function exportBackup(){
   const data = {};
   for(let i=0;i<localStorage.length;i++){
     const k = localStorage.key(i);
-    if(k===STORAGE_TYPES_KEY || k===STORAGE_PAY_KEY || k.startsWith('month-')){
+    if(k===STORAGE_STRUCTURES_KEY || k.startsWith('shift-types:') || k.startsWith('pay-config:') || k.startsWith('departments:') || k.startsWith('month:')){
       data[k] = localStorage.getItem(k);
     }
   }
@@ -927,8 +1129,8 @@ function computeSummary(){
     const holidayName = getHolidayName(viewY, viewM, d);
     const isHoliday = !!holidayName;
 
-    list.forEach(id=>{
-      const t = typeById(id);
+    list.forEach(entry=>{
+      const t = typeById(entry.t);
       if(!t) return;
       const hrs = Number(t.hours)||0;
       const code = (t.code||'').trim().toUpperCase();
@@ -1148,6 +1350,27 @@ function renderSettingsPanel(){
     <div class="special-row"><span>Accesso come</span><span>${authUser?authUser.email:'—'}</span></div>
     <button class="icon-btn" onclick="logout()" type="button" style="margin:8px 0 4px;">🚪 Esci</button>
 
+    <div class="section-label">Strutture</div>
+    <div class="calendar-note" style="margin:-4px 0 10px;">ogni struttura ha turni, reparti e impostazioni propri</div>
+    ${structures.map(s=>`
+      <div class="struct-row">
+        <span class="struct-name">${s.name}${s.id===activeStructureId?' <em>(attiva)</em>':''}</span>
+        <span>
+          <button class="mini-btn" onclick="renameStructure('${s.id}')">rinomina</button>
+          ${structures.length>1?`<button class="mini-btn danger" onclick="removeStructure('${s.id}')">elimina</button>`:''}
+        </span>
+      </div>`).join('')}
+    <button class="add-type" onclick="addStructure()">+ Aggiungi struttura</button>
+
+    <div class="section-label">Reparti — ${structures.find(s=>s.id===activeStructureId)?.name || ''}</div>
+    ${departments.length ? departments.map((dp,i)=>`
+      <div class="dept-row">
+        <input type="color" value="${dp.color}" onchange="updateDepartment(${i},'color',this.value)">
+        <input type="text" value="${dp.name}" onchange="updateDepartment(${i},'name',this.value)">
+        <button class="del" onclick="removeDepartment(${i})" title="Elimina">✕</button>
+      </div>`).join('') : `<div class="calendar-note" style="margin:0 0 8px;">nessun reparto: i turni non verranno divisi</div>`}
+    <button class="add-type" onclick="addDepartment()">+ Aggiungi reparto</button>
+
     <div class="section-label">Aspetto</div>
     <label class="mult-toggle" style="margin-bottom:14px;">
       <input type="checkbox" ${darkMode?'checked':''} onchange="toggleDarkMode(event)">
@@ -1230,23 +1453,52 @@ window.logout = function(){
 function render(){
   if(!authUser){ renderLogin(); return; }
   const app = document.getElementById('app');
-  const summary = computeSummary();
+  const isGeneral = activeStructureId === GENERAL_ID;
+  const summary = isGeneral ? null : computeSummary();
   const nDays = daysInMonth(viewY, viewM);
   const startOffset = firstWeekdayMon0(viewY, viewM);
   const isToday = (d)=> d===today.getDate() && viewM===today.getMonth() && viewY===today.getFullYear();
+  const currentStructure = structures.find(s=>s.id===activeStructureId);
+  const headerTitle = isGeneral ? 'Calendario generale' : (currentStructure ? currentStructure.name : 'Cartellino');
 
   let dayCells = '';
   for(let i=0;i<startOffset;i++){ dayCells += `<div class="day empty"></div>`; }
+
+  if(isGeneral){
+    const generalMap = buildGeneralDayMap(viewY, viewM);
+    for(let d=1; d<=nDays; d++){
+      const items = generalMap[d] || [];
+      const longest = Math.max(0, ...items.map(x=>x.code.length));
+      const fs = items.length>=3 ? '0.6rem' : (items.length===2 && longest>1) ? '0.66rem' : '0.78rem';
+      const blocks = items.map(x=>{
+        const dot = x.deptColor ? `<span class="dept-dot" style="background:${x.deptColor};"></span>` : '';
+        const tip = `${x.label} — ${x.structureName}${x.deptName?' / '+x.deptName:''}`;
+        return `<div class="shift-block" style="background:${x.color}; font-size:${fs};" title="${tip}">${x.code}${dot}</div>`;
+      }).join('');
+      const isSunday = new Date(viewY, viewM, d).getDay()===0;
+      const holidayName = getHolidayName(viewY, viewM, d);
+      const isSpecial = isSunday || holidayName;
+      dayCells += `
+        <div class="day ${isToday(d)?'today':''} ${isSpecial?'special':''}">
+          <span class="num">${d}${isSpecial?`<span class="holiday-dot" title="${holidayName||'Domenica'}"></span>`:''}</span>
+          <div class="day-shifts-fill readonly">${blocks}</div>
+        </div>`;
+    }
+  } else {
   for(let d=1; d<=nDays; d++){
-    const assigned = monthData.shifts[d] || [];
-    const longestCode = Math.max(0, ...assigned.map(id=>{ const t=typeById(id); return t?t.code.length:0; }));
+    const all = monthData.shifts[d] || [];
+    // indici originali conservati, cosi' la rimozione resta corretta anche con il filtro attivo
+    const assigned = all.map((e,i)=>({e,i})).filter(({e})=> deptFilter===null || e.d===deptFilter);
+    const longestCode = Math.max(0, ...assigned.map(({e})=>{ const t=typeById(e.t); return t?t.code.length:0; }));
     const blockFontSize = assigned.length>=3 ? '0.6rem' : (assigned.length===2 && longestCode>1) ? '0.66rem' : '0.78rem';
-    const blocks = assigned.map((id,idx)=>{
-      const t = typeById(id);
+    const blocks = assigned.map(({e,i})=>{
+      const t = typeById(e.t);
       if(!t) return '';
-      const clickAttr = editMode ? `onclick="removeShift(${d},${idx})"` : '';
-      const titleAttr = editMode ? `title="Rimuovi ${t.label}"` : `title="${t.label}"`;
-      return `<div class="shift-block" style="background:${t.color}; font-size:${blockFontSize};" ${clickAttr} ${titleAttr}>${t.code}</div>`;
+      const dept = departments.find(x=>x.id===e.d);
+      const clickAttr = editMode ? `onclick="removeShift(${d},${i})"` : '';
+      const titleAttr = editMode ? `title="Rimuovi ${t.label}${dept?' — '+dept.name:''}"` : `title="${t.label}${dept?' — '+dept.name:''}"`;
+      const deptDot = dept ? `<span class="dept-dot" style="background:${dept.color};"></span>` : '';
+      return `<div class="shift-block" style="background:${t.color}; font-size:${blockFontSize};" ${clickAttr} ${titleAttr}>${t.code}${deptDot}</div>`;
     }).join('');
     const options = `<option value="">+</option>` + types.map(t=>`<option value="${t.id}">${t.code}</option>`).join('');
     const isSunday = new Date(viewY, viewM, d).getDay()===0;
@@ -1258,6 +1510,7 @@ function render(){
         <div class="day-shifts-fill ${editMode?'':'readonly'}">${blocks}</div>
         ${editMode?`<select class="add-shift" data-day="${d}" onchange="addShift(event)">${options}</select>`:''}
       </div>`;
+  }
   }
 
   app.innerHTML = `
@@ -1271,8 +1524,8 @@ function render(){
     </div>` : ''}
     <div class="topbar">
       <div class="brand">
-        <h1>Cartellino</h1>
-        <span class="tag">gestione turni</span>
+        <h1>${headerTitle}</h1>
+        <span class="tag">${isGeneral?'tutte le strutture':'gestione turni'}</span>
       </div>
       <div class="month-nav">
         <button onclick="changeMonth(-1)" aria-label="Mese precedente">‹</button>
@@ -1281,21 +1534,34 @@ function render(){
       </div>
     </div>
 
+    ${structures.length>1 ? `
+    <div class="structure-tabs">
+      ${structures.map(s=>`<button class="structure-tab ${s.id===activeStructureId?'active':''}" onclick="switchStructure('${s.id}')">${s.name}</button>`).join('')}
+      <button class="structure-tab ${isGeneral?'active':''}" onclick="switchStructure('${GENERAL_ID}')">📅 Calendario generale</button>
+    </div>` : ''}
+
+    ${isGeneral ? '' : `
     <div class="panel-buttons">
       <button class="icon-btn" onclick="openPanel('settings')">⚙ Impostazioni</button>
       <button class="icon-btn" onclick="openPanel('stats')">📈 Statistiche</button>
       <button class="icon-btn" onclick="openPanel('earnings')">💶 Guadagni</button>
-    </div>
+    </div>`}
 
     <div class="calendar-note"><span class="holiday-dot"></span>domenica o festivo</div>
 
     <div class="calendar-card">
       <div class="calendar-card-header">
         <span class="calendar-card-title">${ITALIAN_MONTHS[viewM]} ${viewY}</span>
-        <button class="edit-toggle ${editMode?'active':''}" onclick="toggleEditMode()">${editMode?'🔓 Modifica attiva':'🔒 Modifica turni'}</button>
+        ${isGeneral ? `<span class="edit-toggle" style="cursor:default;">sola lettura</span>` : `<button class="edit-toggle ${editMode?'active':''}" onclick="toggleEditMode()">${editMode?'🔓 Modifica attiva':'🔒 Modifica turni'}</button>`}
       </div>
       <div class="weekdays">${ITALIAN_WEEKDAYS.map(w=>`<span>${w}</span>`).join('')}</div>
       <div class="days">${dayCells}</div>
+      ${(!isGeneral && departments.length) ? `
+      <div class="dept-filter">
+        <button class="dept-chip ${deptFilter===null?'active':''}" onclick="setDeptFilter(null)">Tutti</button>
+        ${departments.map(dp=>`<button class="dept-chip ${deptFilter===dp.id?'active':''}" onclick="setDeptFilter('${dp.id}')"><span class="dept-dot" style="background:${dp.color};"></span>${dp.name}</button>`).join('')}
+      </div>
+      ${editMode&&deptFilter!==null?`<div class="calendar-note" style="margin-top:8px;">i nuovi turni verranno assegnati al reparto selezionato</div>`:''}` : ''}
     </div>
 
     ${activePanel ? `
@@ -1310,12 +1576,47 @@ function render(){
   `;
 }
 
+// Controlla se lo stesso turno e' gia' inserito in un'altra struttura in quel giorno.
+function findConflictInOtherStructures(day, typeId){
+  const t = typeById(typeId);
+  if(!t) return null;
+  const code = (t.code||'').trim().toUpperCase();
+  for(const s of structures){
+    if(s.id === activeStructureId) continue;
+    try{
+      const raw = localStorage.getItem(monthKeyFor(s.id, viewY, viewM));
+      if(!raw) continue;
+      const other = normalizeMonthData(JSON.parse(raw));
+      const list = other.shifts[day] || [];
+      // i tipi turno sono definiti per struttura: confrontiamo per codice, non per id
+      let otherTypes = [];
+      try{
+        const ot = localStorage.getItem(typesKey(s.id));
+        otherTypes = ot ? JSON.parse(ot) : DEFAULT_TYPES;
+      }catch(err){ otherTypes = DEFAULT_TYPES; }
+      const match = list.some(entry=>{
+        const ot = otherTypes.find(x=>x.id===entry.t);
+        return ot && (ot.code||'').trim().toUpperCase() === code;
+      });
+      if(match) return {structureName: s.name, code};
+    }catch(err){}
+  }
+  return null;
+}
+
 window.addShift = async function(e){
   const day = Number(e.target.dataset.day);
   const val = e.target.value;
   if(!val) return;
+
+  const conflict = findConflictInOtherStructures(day, val);
+  if(conflict){
+    const ok = confirm(`Attenzione: il giorno ${day} hai gia' un turno "${conflict.code}" in "${conflict.structureName}".\n\nControlla l'altra struttura prima di continuare.\n\nVuoi aggiungerlo lo stesso?`);
+    if(!ok){ render(); return; }
+  }
+
   if(!monthData.shifts[day]) monthData.shifts[day] = [];
-  monthData.shifts[day].push(val);
+  monthData.shifts[day].push({t:val, d:deptFilter});
   await saveMonth(viewY, viewM);
   render();
 };
@@ -1327,6 +1628,95 @@ window.removeShift = async function(day, idx){
     if(monthData.shifts[day].length===0) delete monthData.shifts[day];
   }
   await saveMonth(viewY, viewM);
+  render();
+};
+
+window.switchStructure = async function(sid){
+  if(sid === GENERAL_ID){
+    activeStructureId = GENERAL_ID;
+    deptFilter = null;
+    editMode = false;
+    activePanel = null;
+    render();
+    return;
+  }
+  activeStructureId = sid;
+  deptFilter = null;
+  await loadSettings();
+  await loadMonth(viewY, viewM);
+  render();
+};
+window.setDeptFilter = function(id){
+  deptFilter = id;
+  render();
+};
+window.addStructure = async function(){
+  const name = prompt('Nome della nuova struttura:');
+  if(!name || !name.trim()) return;
+  const sid = 's' + Date.now();
+  structures.push({id:sid, name:name.trim()});
+  saveStructures();
+  activeStructureId = sid;
+  deptFilter = null;
+  await loadSettings();
+  await loadMonth(viewY, viewM);
+  render();
+};
+window.renameStructure = function(sid){
+  const s = structures.find(x=>x.id===sid);
+  if(!s) return;
+  const name = prompt('Nuovo nome:', s.name);
+  if(!name || !name.trim()) return;
+  s.name = name.trim();
+  saveStructures();
+  render();
+};
+window.removeStructure = async function(sid){
+  if(structures.length<=1){ alert('Deve restare almeno una struttura.'); return; }
+  const s = structures.find(x=>x.id===sid);
+  if(!s) return;
+  if(!confirm(`Eliminare "${s.name}" e tutti i suoi turni? L'operazione non si puo' annullare.`)) return;
+  try{
+    localStorage.removeItem(typesKey(sid));
+    localStorage.removeItem(payKey(sid));
+    localStorage.removeItem(deptsKey(sid));
+    const toRemove = [];
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(k && k.startsWith(`month:${sid}:`)) toRemove.push(k);
+    }
+    toRemove.forEach(k=>localStorage.removeItem(k));
+  }catch(e){}
+  structures = structures.filter(x=>x.id!==sid);
+  saveStructures();
+  activeStructureId = structures[0].id;
+  deptFilter = null;
+  await loadSettings();
+  await loadMonth(viewY, viewM);
+  render();
+};
+
+window.addDepartment = function(){
+  const name = prompt('Nome del reparto:');
+  if(!name || !name.trim()) return;
+  const palette = ['#3E7C6B','#D98E3D','#B85450','#5C7FA6','#7A5C9E','#4A8C5F'];
+  departments.push({id:'d'+Date.now(), name:name.trim(), color:palette[departments.length % palette.length]});
+  saveDepartments();
+  render();
+};
+window.updateDepartment = function(idx, field, value){
+  if(!departments[idx]) return;
+  departments[idx][field] = value;
+  saveDepartments();
+  render();
+};
+window.removeDepartment = function(idx){
+  const dp = departments[idx];
+  if(!dp) return;
+  if(!confirm(`Eliminare il reparto "${dp.name}"? I turni gia' inseriti resteranno, ma senza reparto.`)) return;
+  departments.splice(idx,1);
+  saveDepartments();
+  if(deptFilter===dp.id) deptFilter = null;
   render();
 };
 
@@ -1401,7 +1791,7 @@ window.changeMonth = async function(delta){
   viewM += delta;
   if(viewM<0){ viewM=11; viewY--; }
   if(viewM>11){ viewM=0; viewY++; }
-  await loadMonth(viewY, viewM);
+  if(activeStructureId !== GENERAL_ID) await loadMonth(viewY, viewM);
   render();
 };
 
@@ -1449,10 +1839,35 @@ window.applySettings = async function(){
   render();
 };
 
+// Usata dall'app Flutter per sapere i turni di domani e programmare la notifica.
+window.getTomorrowShifts = function(){
+  const t = new Date();
+  t.setDate(t.getDate()+1);
+  const y = t.getFullYear(), m = t.getMonth(), d = t.getDate();
+  const out = [];
+  try{
+    const sList = JSON.parse(localStorage.getItem(STORAGE_STRUCTURES_KEY) || '[]');
+    sList.forEach(s=>{
+      let sTypes = DEFAULT_TYPES;
+      try{ const tt = localStorage.getItem(`shift-types:${s.id}`); if(tt) sTypes = JSON.parse(tt); }catch(e){}
+      let raw = localStorage.getItem(`month:${s.id}:${y}-${String(m+1).padStart(2,'0')}`);
+      if(!raw) return;
+      const md = normalizeMonthData(JSON.parse(raw));
+      (md.shifts[d]||[]).forEach(entry=>{
+        const ty = sTypes.find(x=>x.id===entry.t);
+        if(ty) out.push(sList.length>1 ? `${ty.label} (${s.name})` : ty.label);
+      });
+    });
+  }catch(e){}
+  return JSON.stringify(out);
+};
+
 (async function init(){
   if(!localStorage.getItem(STORAGE_FIRSTUSE_KEY)){
     localStorage.setItem(STORAGE_FIRSTUSE_KEY, new Date().toISOString());
   }
+  migrateLegacyData();
+  loadStructures();
   await loadSettings();
   await loadMonth(viewY, viewM);
   render();

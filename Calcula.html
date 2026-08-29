@@ -870,6 +870,92 @@ body{
   background:var(--paper-raised);
 }
 
+.chart-legend{
+  display:flex;
+  gap:14px;
+  flex-wrap:wrap;
+  font-size:0.72rem;
+  color:var(--ink-soft);
+  margin-bottom:10px;
+}
+.chart-legend .sw{
+  display:inline-block;
+  width:10px;height:10px;
+  border-radius:3px;
+  margin-right:4px;
+  vertical-align:middle;
+}
+.chart-legend .sw.hours{background:var(--teal);}
+.chart-legend .sw.money{background:var(--amber);}
+.chart-area{
+  display:flex;
+  align-items:flex-end;
+  gap:3px;
+  height:150px;
+  padding-bottom:4px;
+  border-bottom:1px solid var(--line);
+}
+.chart-col{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-end;
+  gap:5px;
+  height:100%;
+}
+.chart-pair{
+  display:flex;
+  align-items:flex-end;
+  gap:2px;
+  width:100%;
+  height:100%;
+  justify-content:center;
+}
+.chart-bar{
+  width:44%;
+  border-radius:3px 3px 0 0;
+  min-height:0;
+}
+.chart-bar.hours{background:var(--teal);}
+.chart-bar.money{background:var(--amber);}
+.chart-col.current .chart-bar{outline:2px solid var(--ink); outline-offset:1px;}
+.chart-label{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.6rem;
+  color:var(--ink-soft);
+}
+.chart-col.current .chart-label{color:var(--ink); font-weight:700;}
+.chart-totals{
+  display:flex;
+  gap:10px;
+  margin-top:12px;
+}
+.chart-totals div{
+  flex:1;
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:9px;
+  padding:9px 11px;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.chart-totals span{font-size:0.68rem; color:var(--ink-soft);}
+.chart-totals b{font-family:'IBM Plex Mono', monospace; font-size:0.98rem;}
+.month-table{display:flex; flex-direction:column;}
+.month-row{
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  gap:12px;
+  padding:7px 0;
+  border-bottom:1px dashed var(--line);
+  font-size:0.82rem;
+  font-family:'IBM Plex Mono', monospace;
+}
+.month-row span:first-child{text-transform:capitalize; font-family:'IBM Plex Sans', sans-serif;}
+.month-row.current{color:var(--amber); font-weight:700;}
+
 body.dark{
   --ink:#E8ECEE;
   --ink-soft:#93A2A9;
@@ -969,6 +1055,7 @@ const DEFAULT_TYPES = [
 function defaultPay(){
   return {
     hourlyRate: 10,
+    taxPercent: 18,
     multipliers: {
       overtime: {m1:null, m2:null, useM2:false},
       holiday: {m1:null, m2:null, useM2:false},
@@ -1144,6 +1231,7 @@ async function loadSettings(){
     if(p){
       const parsed = JSON.parse(p);
       if(parsed.hourlyRate!==undefined) pay.hourlyRate = parsed.hourlyRate;
+      if(parsed.taxPercent!==undefined) pay.taxPercent = parsed.taxPercent;
       if(parsed.multipliers){
         Object.keys(pay.multipliers).forEach(k=>{
           if(parsed.multipliers[k]) pay.multipliers[k] = {...pay.multipliers[k], ...parsed.multipliers[k]};
@@ -1389,6 +1477,95 @@ function hexToSoftBg(hex){
   return `rgba(${r},${g},${b},0.18)`;
 }
 
+
+// Calcola ore lavorate e totale (tasse gia' sottratte) per un mese qualunque
+// della struttura attiva, senza modificare quello che si sta guardando.
+function computeMonthStats(y, m){
+  let raw = null;
+  try{ raw = localStorage.getItem(monthKeyFor(activeStructureId, y, m)); }catch(e){}
+  if(!raw) return {hours:0, total:0, net:null, hasData:false};
+  let md;
+  try{ md = normalizeMonthData(JSON.parse(raw)); }catch(e){ return {hours:0,total:0,net:null,hasData:false}; }
+
+  let normalH=0, holH=0, sunH=0, vacDays=new Set(), nightDays=new Set();
+  Object.entries(md.shifts).forEach(([day,list])=>{
+    const d = Number(day);
+    const isSun = new Date(y,m,d).getDay()===0;
+    const isHol = !!getHolidayName(y,m,d);
+    list.forEach(entry=>{
+      const t = typeById(entry.t);
+      if(!t) return;
+      const hrs = Number(t.hours)||0;
+      const code = (t.code||'').trim().toUpperCase();
+      if(code==='N') nightDays.add(day);
+      if(code==='F'){ vacDays.add(day); return; }
+      if(isHol) holH += hrs;
+      else if(isSun) sunH += hrs;
+      else normalH += hrs;
+    });
+  });
+
+  const ordinary = normalH + sunH;
+  const hours = normalH + sunH + holH;
+  const gross = ordinary * (Number(pay.hourlyRate)||0);
+  const otH = calcOvertimeHours(md.overtimeThreshold, ordinary);
+  const otAmount = calcMultiplied(otH, pay.multipliers.overtime);
+  const otBase = otH * (Number(pay.hourlyRate)||0);
+  const grand = gross - otBase + otAmount
+    + calcMultiplied(holH, pay.multipliers.holiday)
+    + calcMultiplied(sunH, pay.multipliers.sunday)
+    + calcMultiplied(nightDays.size, pay.multipliers.night)
+    + calcMultiplied(vacDays.size, pay.multipliers.vacation);
+  const pct = (pay.taxPercent===null||pay.taxPercent===undefined) ? 18 : Number(pay.taxPercent);
+  const total = grand * (1 - pct/100);
+  return {hours, total, net: (md.net===undefined?null:md.net), hasData: hours>0 || grand>0 || md.net!=null};
+}
+
+function renderYearChart(){
+  const year = viewY;
+  const data = [];
+  for(let m=0;m<12;m++){ data.push(computeMonthStats(year,m)); }
+  const maxH = Math.max(1, ...data.map(d=>d.hours));
+  const maxT = Math.max(1, ...data.map(d=>d.total));
+
+  const totHours = data.reduce((s,d)=>s+d.hours,0);
+  const totMoney = data.reduce((s,d)=>s+d.total,0);
+
+  const cols = data.map((d,m)=>{
+    const hH = d.hours>0 ? Math.max(3, Math.round((d.hours/maxH)*100)) : 0;
+    const hT = d.total>0 ? Math.max(3, Math.round((d.total/maxT)*100)) : 0;
+    const cur = m===viewM ? 'current' : '';
+    return `
+      <div class="chart-col ${cur}" title="${ITALIAN_MONTHS_SHORT[m]} — ${fmtHours(d.hours)} h · ${fmtEuro(d.total)}">
+        <div class="chart-pair">
+          <div class="chart-bar hours" style="height:${hH}%;"></div>
+          <div class="chart-bar money" style="height:${hT}%;"></div>
+        </div>
+        <span class="chart-label">${ITALIAN_MONTHS_SHORT[m]}</span>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="chart-legend">
+      <span><i class="sw hours"></i> ore lavorate</span>
+      <span><i class="sw money"></i> totale al netto delle tasse</span>
+    </div>
+    <div class="chart-area">${cols}</div>
+    <div class="chart-totals">
+      <div><span>Ore nell'anno</span><b>${fmtHours(totHours)} h</b></div>
+      <div><span>Totale nell'anno</span><b>${fmtEuro(totMoney)}</b></div>
+    </div>
+    <div class="section-label" style="margin-top:18px;">Dettaglio mensile</div>
+    <div class="month-table">
+      ${data.map((d,m)=> d.hasData ? `
+        <div class="month-row ${m===viewM?'current':''}">
+          <span>${ITALIAN_MONTHS[m]}</span>
+          <span>${fmtHours(d.hours)} h</span>
+          <span>${fmtEuro(d.total)}</span>
+        </div>` : '').join('') || `<div class="calendar-note">nessun dato per il ${year}</div>`}
+    </div>`;
+}
+
 function renderAnnualNetChart(){
   const year = viewY;
   const nets = [];
@@ -1536,9 +1713,9 @@ function renderEarningsPanel(summary){
   // cosi' non vengono pagate due volte.
   const grandTotal = summary.gross - overtimeBaseAlreadyInGross + overtimeAmount + holidayAmount + sundayAmount + nightAmount + vacationAmount;
 
-  const taxes = monthData.taxes;
-  const hasTaxes = taxes!==null && taxes!==undefined && taxes!=='';
-  const totalAfterTaxes = grandTotal - (Number(taxes)||0);
+  const taxPct = (pay.taxPercent===null||pay.taxPercent===undefined) ? 18 : Number(pay.taxPercent);
+  const taxAmount = grandTotal * (taxPct/100);
+  const totalAfterTaxes = grandTotal - taxAmount;
 
   return `
     <h2>Guadagni — ${ITALIAN_MONTHS[viewM]} ${viewY}</h2>
@@ -1550,15 +1727,14 @@ function renderEarningsPanel(summary){
       <span>Totale mese stimato</span>
       <span>${fmtEuro(grandTotal)}</span>
     </div>
-    <div style="margin:14px 0 6px;">
-      <div class="section-label" style="margin:0 0 6px;">Tasse del mese (€)</div>
-      <input type="number" step="0.01" class="net-input-light" placeholder="Inserisci le tasse" value="${hasTaxes?taxes:''}" onchange="onTaxesChange(event)">
+    <div class="special-row" style="color:var(--rust);">
+      <span>Tasse (${taxPct}%) <button type="button" class="mini-btn" onclick="changeTaxPercent()">modifica</button></span>
+      <span>− ${fmtEuro(taxAmount)}</span>
     </div>
-    ${hasTaxes?`
     <div class="mult-total" style="font-size:1rem;">
-      <span>Totale aggiornato</span>
+      <span>Totale al netto delle tasse</span>
       <span>${fmtEuro(totalAfterTaxes)}</span>
-    </div>`:''}
+    </div>
     <div style="margin:16px 0 20px;">
       <div class="section-label" style="margin:0 0 6px;">Netto reale del mese</div>
       <input type="number" step="0.01" class="net-input-light" id="netInput" placeholder="Inserisci l'importo" value="${summary.net===null||summary.net===undefined?'':summary.net}" onchange="onNetChange(event)">
@@ -1573,8 +1749,9 @@ function renderEarningsPanel(summary){
 
 function renderStatsPanel(){
   return `
-    <h2>Statistiche</h2>
-    <div class="section-label">Netto — andamento ${viewY}</div>
+    <h2>Statistiche ${viewY}</h2>
+    ${renderYearChart()}
+    <div class="section-label" style="margin-top:20px;">Netto reale inserito a mano</div>
     ${renderAnnualNetChart()}
   `;
 }
@@ -2015,12 +2192,17 @@ window.toggleEditMode = function(){
   render();
 };
 
-window.onTaxesChange = async function(e){
-  const v = e.target.value;
-  monthData.taxes = (v===''? null : Number(v));
-  await saveMonth(viewY, viewM);
+window.changeTaxPercent = async function(){
+  const cur = (pay.taxPercent===null||pay.taxPercent===undefined) ? 18 : pay.taxPercent;
+  const v = prompt('Percentuale di tasse da sottrarre al totale lordo:', cur);
+  if(v===null) return;
+  const n = Number(String(v).replace(',','.'));
+  if(isNaN(n) || n<0 || n>100){ alert('Inserisci un numero tra 0 e 100.'); return; }
+  pay.taxPercent = n;
+  await saveSettings();
   renderPanelBody();
 };
+
 
 window.onNetChange = async function(e){
   const v = e.target.value;

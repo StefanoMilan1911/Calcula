@@ -218,7 +218,7 @@ body{
 .day-shifts-fill{
   flex:1;
   display:flex;
-  flex-direction:row;
+  flex-direction:column;
   border-radius:5px;
   overflow:hidden;
   min-height:34px;
@@ -242,7 +242,7 @@ body{
 }
 .day-shifts-fill.readonly .shift-block{cursor:default;}
 .shift-block:not(:last-child){
-  border-right:1px solid rgba(255,255,255,0.4);
+  border-bottom:1px solid rgba(255,255,255,0.4);
 }
 .add-shift{
   width:100%;
@@ -711,7 +711,7 @@ let pay = defaultPay();
 let today = new Date();
 let viewY = today.getFullYear();
 let viewM = today.getMonth();
-let monthData = {shifts:{}, net:null, extra:{}, overtimeThreshold:null};
+let monthData = {shifts:{}, net:null, extra:{}, overtimeThreshold:null, taxes:null};
 let editMode = false;
 let authUser = null;
 let openEarningsSections = new Set();
@@ -810,21 +810,21 @@ function normalizeMonthData(parsed){
     Object.entries(parsed.shifts).forEach(([d,v])=>{ shifts[d] = Array.isArray(v)?v:[v]; });
     const extra = {};
     if(parsed.extra) Object.entries(parsed.extra).forEach(([d,v])=>{ extra[d] = Number(v); });
-    return {shifts, net: (parsed.net===undefined?null:parsed.net), extra, overtimeThreshold: (parsed.overtimeThreshold===undefined?null:parsed.overtimeThreshold)};
+    return {shifts, net: (parsed.net===undefined?null:parsed.net), extra, overtimeThreshold: (parsed.overtimeThreshold===undefined?null:parsed.overtimeThreshold), taxes: (parsed.taxes===undefined?null:parsed.taxes)};
   }
   if(parsed && typeof parsed==='object'){
     const shifts = {};
     Object.entries(parsed).forEach(([d,v])=>{ shifts[d] = Array.isArray(v)?v:[v]; });
-    return {shifts, net:null, extra:{}, overtimeThreshold:null};
+    return {shifts, net:null, extra:{}, overtimeThreshold:null, taxes:null};
   }
-  return {shifts:{}, net:null, extra:{}, overtimeThreshold:null};
+  return {shifts:{}, net:null, extra:{}, overtimeThreshold:null, taxes:null};
 }
 
 async function loadMonth(y,m){
   try{
     const r = localStorage.getItem(monthKey(y,m));
-    monthData = r ? normalizeMonthData(JSON.parse(r)) : {shifts:{}, net:null, extra:{}, overtimeThreshold:null};
-  }catch(e){ monthData = {shifts:{}, net:null, extra:{}, overtimeThreshold:null}; }
+    monthData = r ? normalizeMonthData(JSON.parse(r)) : {shifts:{}, net:null, extra:{}, overtimeThreshold:null, taxes:null};
+  }catch(e){ monthData = {shifts:{}, net:null, extra:{}, overtimeThreshold:null, taxes:null}; }
 }
 async function saveMonth(y,m){
   try{
@@ -1097,13 +1097,29 @@ function renderEarningsPanel(summary){
   // cosi' non vengono pagate due volte.
   const grandTotal = summary.gross - overtimeBaseAlreadyInGross + overtimeAmount + holidayAmount + sundayAmount + nightAmount + vacationAmount;
 
+  const taxes = monthData.taxes;
+  const hasTaxes = taxes!==null && taxes!==undefined && taxes!=='';
+  const totalAfterTaxes = grandTotal - (Number(taxes)||0);
+
   return `
     <h2>Guadagni — ${ITALIAN_MONTHS[viewM]} ${viewY}</h2>
     <div class="section-label">Riepilogo mese</div>
     <div class="special-row"><span>Ore totali</span><span>${fmtHours(summary.totalHours)} h</span></div>
     <div class="special-row"><span>Lordo (ore ordinarie)</span><span>${fmtEuro(summary.gross)}</span></div>
-    <div class="special-row" style="color:var(--ink-soft); font-size:0.72rem; padding-top:0;">+ straordinari / festivi / domenicali / notte / ferie (dettaglio sotto)</div>
-    <div class="mult-total" style="font-size:1rem; margin-top:10px;"><span>Totale mese stimato</span><span>${fmtEuro(grandTotal)}</span></div>
+    <div class="special-row special-row-sep" style="color:var(--ink-soft); font-size:0.72rem;">+ straordinari / festivi / domenicali / notte / ferie (dettaglio sotto)</div>
+    <div class="mult-total" style="font-size:1rem; margin-top:10px; border-top:none; padding-top:0;">
+      <span>Totale mese stimato</span>
+      <span>${fmtEuro(grandTotal)}</span>
+    </div>
+    <div style="margin:14px 0 6px;">
+      <div class="section-label" style="margin:0 0 6px;">Tasse del mese (€)</div>
+      <input type="number" step="0.01" class="net-input-light" placeholder="Inserisci le tasse" value="${hasTaxes?taxes:''}" onchange="onTaxesChange(event)">
+    </div>
+    ${hasTaxes?`
+    <div class="mult-total" style="font-size:1rem;">
+      <span>Totale aggiornato</span>
+      <span>${fmtEuro(totalAfterTaxes)}</span>
+    </div>`:''}
     <div style="margin:16px 0 20px;">
       <div class="section-label" style="margin:0 0 6px;">Netto reale del mese</div>
       <input type="number" step="0.01" class="net-input-light" id="netInput" placeholder="Inserisci l'importo" value="${summary.net===null||summary.net===undefined?'':summary.net}" onchange="onNetChange(event)">
@@ -1146,11 +1162,12 @@ function renderSettingsPanel(){
     </div>
 
     <div class="section-label">Tipi di turno</div>
+    <div class="legend">${types.map(t=>`<span class="chip" style="background:${hexToSoftBg(t.color)};color:${t.color};border-color:${t.color}44;">${t.code} · ${t.hours}h</span>`).join('')}</div>
     <div class="calendar-note" style="margin:-4px 0 10px;">il tipo con codice "F" viene sempre contato come giorno di ferie, "N" come giorno di notte</div>
     <div id="typesList">
       ${types.map((t,i)=>`
         <div class="type-row" data-idx="${i}">
-          <input type="color" value="${t.color}" onchange="updateType(${i},'color',this.value)">
+          <input type="color" value="${t.color}" onchange="updateTypeColor(${i},this.value)">
           <input type="text" value="${t.code}" placeholder="Cod." onchange="updateType(${i},'code',this.value)">
           <input type="text" value="${t.label}" placeholder="Etichetta" onchange="updateType(${i},'label',this.value)">
           <input type="number" step="0.5" value="${t.hours}" onchange="updateType(${i},'hours',this.value)">
@@ -1243,8 +1260,6 @@ function render(){
       </div>`;
   }
 
-  const legend = types.map(t=>`<span class="chip" style="background:${hexToSoftBg(t.color)};color:${t.color};border-color:${t.color}44;">${t.code} · ${t.hours}h</span>`).join('');
-
   app.innerHTML = `
     ${shouldShowBackupReminder() ? `
     <div class="backup-banner">
@@ -1272,7 +1287,6 @@ function render(){
       <button class="icon-btn" onclick="openPanel('earnings')">💶 Guadagni</button>
     </div>
 
-    <div class="legend">${legend}</div>
     <div class="calendar-note"><span class="holiday-dot"></span>domenica o festivo</div>
 
     <div class="calendar-card">
@@ -1318,6 +1332,13 @@ window.removeShift = async function(day, idx){
 
 window.toggleEditMode = function(){
   editMode = !editMode;
+  render();
+};
+
+window.onTaxesChange = async function(e){
+  const v = e.target.value;
+  monthData.taxes = (v===''? null : Number(v));
+  await saveMonth(viewY, viewM);
   render();
 };
 
@@ -1394,6 +1415,14 @@ window.closePanel = function(){
 };
 
 let draftTypes = null;
+window.updateTypeColor = async function(idx, value){
+  if(!draftTypes) draftTypes = JSON.parse(JSON.stringify(types));
+  draftTypes[idx].color = value;
+  types = draftTypes;
+  await saveSettings();
+  render();
+};
+
 window.updateType = function(idx, field, value){
   if(!draftTypes) draftTypes = JSON.parse(JSON.stringify(types));
   draftTypes[idx][field] = (field==='hours') ? Number(value) : value;

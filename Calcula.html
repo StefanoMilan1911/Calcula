@@ -1642,6 +1642,7 @@ function renderLogin(){
           </label>
           <div id="loginError" class="login-error"></div>
           <button type="submit" class="btn-primary" style="width:100%; margin-top:6px;">Accedi</button>
+          <button type="button" class="icon-btn" style="width:100%; margin-top:8px; justify-content:center;" onclick="localOnlyLogin()">Entra senza account online</button>
         </form>
         <p class="login-note">Accesso dimostrativo — per ora nessun dato viene verificato online.</p>
       </div>
@@ -1663,17 +1664,10 @@ window.onLoginSubmit = async function(e){
       try{
         await window.FB.signUp(email, pass);
       }catch(err2){
-        // password sbagliata su un account esistente: va segnalato
-        if(err2.code === 'auth/email-already-in-use' || err2.code === 'auth/wrong-password'){
-          if(errBox) errBox.textContent = 'Password errata per questo indirizzo.';
-          return;
+        // mostra sempre il motivo reale, cosi' i problemi si vedono
+        if(errBox){
+          errBox.innerHTML = `Accesso online non riuscito.<br><small>${err2.code || ''} ${err2.message || ''}</small>`;
         }
-        // qualsiasi altro problema (rete assente, servizio non raggiungibile):
-        // si entra comunque in locale, senza scambio turni
-        authUser = {email};
-        try{ localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(authUser)); }catch(e){}
-        loadGroup();
-        render();
         return;
       }
     }
@@ -1686,6 +1680,14 @@ window.onLoginSubmit = async function(e){
   render();
   startRequestsListener();
 };
+window.localOnlyLogin = function(){
+  const email = document.getElementById('loginEmail').value.trim() || 'locale';
+  authUser = {email};
+  try{ localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(authUser)); }catch(e){}
+  loadGroup();
+  render();
+};
+
 window.logout = async function(){
   stopRequestsListener();
   if(window.FB && window.FB.enabled){

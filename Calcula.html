@@ -110,7 +110,7 @@ body{
 
 .panel-buttons{
   display:grid;
-  grid-template-columns:repeat(3,1fr);
+  grid-template-columns:repeat(4,1fr);
   gap:8px;
   margin-bottom:16px;
 }
@@ -796,6 +796,55 @@ body{
 }
 .color-custom-btn input{display:none;}
 
+.login-error{
+  color:var(--rust);
+  font-size:0.75rem;
+  min-height:1em;
+  margin-bottom:6px;
+  text-align:center;
+}
+.swap-card{
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:11px 13px;
+  margin-bottom:9px;
+  background:var(--paper);
+}
+.swap-card.taken{opacity:0.65;}
+.swap-card-head{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  margin-bottom:4px;
+}
+.swap-shift{
+  font-family:'IBM Plex Mono', monospace;
+  font-weight:700;
+  background:var(--ink);
+  color:var(--paper);
+  border-radius:5px;
+  padding:2px 8px;
+  font-size:0.8rem;
+}
+.swap-date{font-weight:600; font-size:0.88rem;}
+.swap-meta{font-size:0.72rem; color:var(--ink-soft); margin-bottom:6px;}
+.swap-note{
+  font-size:0.8rem;
+  font-style:italic;
+  color:var(--ink-soft);
+  margin-bottom:8px;
+}
+.swap-status{font-size:0.8rem; color:var(--teal); font-weight:600;}
+.pay-row input[type=date]{
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:8px 10px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:0.85rem;
+  color:var(--ink);
+  background:var(--paper-raised);
+}
+
 body.dark{
   --ink:#E8ECEE;
   --ink-soft:#93A2A9;
@@ -813,6 +862,50 @@ body.dark{
   <div class="loading" id="loading">Caricamento cartellino…</div>
 </div>
 
+<script type="module">
+// ============ CONFIGURAZIONE FIREBASE ============
+// Incolla qui i dati del tuo progetto Firebase (Impostazioni progetto -> Le tue app -> Web).
+// Finche' apiKey resta "INCOLLA_QUI", la parte online resta spenta e l'app funziona in locale.
+const firebaseConfig = {
+  apiKey: "AIzaSyCPKNvtnM1nCPxLPyfzBUqaz6gqsc9THkU",
+  authDomain: "demoonline-7c881.firebaseapp.com",
+  projectId: "demoonline-7c881",
+  storageBucket: "demoonline-7c881.firebasestorage.app",
+  messagingSenderId: "1053541344307",
+  appId: "1:1053541344307:web:6d44b0db8393e5a0ef6f46"
+};
+// ================================================
+
+window.FB = { enabled: false };
+window.FB_READY = (async ()=>{
+  if(!firebaseConfig.apiKey || firebaseConfig.apiKey === "INCOLLA_QUI") return;
+  try{
+    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+    const { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+            signOut, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+    const { getFirestore, collection, doc, addDoc, getDoc, setDoc, updateDoc,
+            deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp }
+            = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    window.FB = {
+      enabled: true, auth, db,
+      signIn: (e,p)=>signInWithEmailAndPassword(auth,e,p),
+      signUp: (e,p)=>createUserWithEmailAndPassword(auth,e,p),
+      signOut: ()=>signOut(auth),
+      onAuth: (cb)=>onAuthStateChanged(auth, cb),
+      collection, doc, addDoc, getDoc, setDoc, updateDoc, deleteDoc,
+      query, where, orderBy, onSnapshot, serverTimestamp
+    };
+  }catch(e){
+    console.error('Firebase non disponibile', e);
+    window.FB = { enabled:false };
+  }
+})();
+</script>
 <script>
 const STORAGE_LASTBACKUP_KEY = 'last-backup-at';
 const STORAGE_FIRSTUSE_KEY = 'first-use-at';
@@ -879,6 +972,12 @@ let darkMode = false;
 let openSuggestionKeys = new Set();
 let openColorPicker = null; // es. 'type:2' oppure 'dept:0'
 let customColors = [];  // ultimi colori personalizzati usati
+let groupCode = null;        // codice del gruppo di lavoro
+let displayName = '';        // nome mostrato ai colleghi
+let openRequests = [];       // richieste di scambio del gruppo
+let requestsUnsub = null;    // per staccare l'ascolto in tempo reale
+let onlineBusy = false;
+const STORAGE_GROUP_KEY = 'work-group';
 
 function loadCustomColors(){
   try{
@@ -1541,6 +1640,7 @@ function renderLogin(){
           <label class="login-field">Password
             <input type="password" id="loginPassword" placeholder="••••••••" required>
           </label>
+          <div id="loginError" class="login-error"></div>
           <button type="submit" class="btn-primary" style="width:100%; margin-top:6px;">Accedi</button>
         </form>
         <p class="login-note">Accesso dimostrativo — per ora nessun dato viene verificato online.</p>
@@ -1553,11 +1653,44 @@ window.onLoginSubmit = async function(e){
   const email = document.getElementById('loginEmail').value.trim();
   const pass = document.getElementById('loginPassword').value;
   if(!email || !pass) return;
-  authUser = {email};
+
+  if(window.FB && window.FB.enabled){
+    const errBox = document.getElementById('loginError');
+    try{
+      await window.FB.signIn(email, pass);
+    }catch(err){
+      // se l'utente non esiste, prova a registrarlo
+      try{
+        await window.FB.signUp(email, pass);
+      }catch(err2){
+        // password sbagliata su un account esistente: va segnalato
+        if(err2.code === 'auth/email-already-in-use' || err2.code === 'auth/wrong-password'){
+          if(errBox) errBox.textContent = 'Password errata per questo indirizzo.';
+          return;
+        }
+        // qualsiasi altro problema (rete assente, servizio non raggiungibile):
+        // si entra comunque in locale, senza scambio turni
+        authUser = {email};
+        try{ localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(authUser)); }catch(e){}
+        loadGroup();
+        render();
+        return;
+      }
+    }
+    authUser = {email, uid: window.FB.auth.currentUser?.uid || null};
+  } else {
+    authUser = {email};
+  }
   try{ localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(authUser)); }catch(err){}
+  loadGroup();
   render();
+  startRequestsListener();
 };
-window.logout = function(){
+window.logout = async function(){
+  stopRequestsListener();
+  if(window.FB && window.FB.enabled){
+    try{ await window.FB.signOut(); }catch(e){}
+  }
   authUser = null;
   try{ localStorage.removeItem(STORAGE_AUTH_KEY); }catch(err){}
   render();
@@ -1658,6 +1791,7 @@ function render(){
       <button class="icon-btn" onclick="openPanel('settings')">⚙ Impostazioni</button>
       <button class="icon-btn" onclick="openPanel('stats')">📈 Statistiche</button>
       <button class="icon-btn" onclick="openPanel('earnings')">💶 Guadagni</button>
+      <button class="icon-btn" onclick="openPanel('swap')">🔄 Scambi</button>
     </div>`}
 
     <div class="calendar-note"><span class="holiday-dot"></span>domenica o festivo</div>
@@ -1684,22 +1818,11 @@ function render(){
         ${activePanel==='settings' ? renderSettingsPanel() : ''}
         ${activePanel==='stats' ? renderStatsPanel() : ''}
         ${activePanel==='earnings' ? renderEarningsPanel(summary) : ''}
+        ${activePanel==='swap' ? renderSwapPanel() : ''}
       </div>
     </div>` : ''}
   `;
 
-  // il ripristino deve avvenire dopo che il browser ha ridisegnato,
-  // altrimenti l'altezza non e' ancora quella definitiva e lo scorrimento salta
-  const restoreScroll = ()=>{
-    const ov = document.querySelector('.overlay');
-    if(ov) ov.scrollTop = prevOverlayTop;
-    window.scrollTo(0, prevWin);
-  };
-  restoreScroll();
-  requestAnimationFrame(()=>{
-    restoreScroll();
-    requestAnimationFrame(restoreScroll);
-  });
 }
 
 // Controlla se lo stesso turno e' gia' inserito in un'altra struttura in quel giorno.
@@ -1741,6 +1864,7 @@ function renderPanelBody(){
     ${activePanel==='settings' ? renderSettingsPanel() : ''}
     ${activePanel==='stats' ? renderStatsPanel() : ''}
     ${activePanel==='earnings' ? renderEarningsPanel(summary) : ''}
+    ${activePanel==='swap' ? renderSwapPanel() : ''}
   `;
 }
 
@@ -2019,6 +2143,195 @@ window.getTomorrowShifts = function(){
   return JSON.stringify(out);
 };
 
+
+// ==================== SCAMBIO TURNI (online) ====================
+
+function loadGroup(){
+  try{
+    const g = JSON.parse(localStorage.getItem(STORAGE_GROUP_KEY) || 'null');
+    if(g){ groupCode = g.code || null; displayName = g.name || ''; }
+  }catch(e){ groupCode = null; displayName = ''; }
+}
+function saveGroup(){
+  try{ localStorage.setItem(STORAGE_GROUP_KEY, JSON.stringify({code:groupCode, name:displayName})); }catch(e){}
+}
+
+function onlineReady(){
+  return window.FB && window.FB.enabled && authUser && authUser.uid && groupCode;
+}
+
+function stopRequestsListener(){
+  if(requestsUnsub){ try{ requestsUnsub(); }catch(e){} requestsUnsub = null; }
+  openRequests = [];
+}
+
+function startRequestsListener(){
+  stopRequestsListener();
+  if(!onlineReady()) return;
+  const FB = window.FB;
+  try{
+    const q = FB.query(
+      FB.collection(FB.db, 'groups', groupCode, 'requests'),
+      FB.orderBy('date')
+    );
+    requestsUnsub = FB.onSnapshot(q, (snap)=>{
+      openRequests = [];
+      snap.forEach(d=>openRequests.push({id:d.id, ...d.data()}));
+      if(activePanel === 'swap') renderPanelBody();
+    }, (err)=>console.error('Ascolto richieste non riuscito', err));
+  }catch(e){ console.error(e); }
+}
+
+window.joinGroup = async function(){
+  const code = prompt('Codice del gruppo di lavoro (chiedilo a un collega, oppure inventane uno nuovo per crearlo):');
+  if(!code || !code.trim()) return;
+  const name = prompt('Come vuoi farti chiamare dai colleghi?', displayName || (authUser?authUser.email.split('@')[0]:''));
+  if(!name || !name.trim()) return;
+  groupCode = code.trim().toLowerCase();
+  displayName = name.trim();
+  saveGroup();
+  startRequestsListener();
+  renderPanelBody();
+};
+
+window.leaveGroup = function(){
+  if(!confirm('Uscire dal gruppo? Le tue richieste gia inviate restano visibili ai colleghi.')) return;
+  stopRequestsListener();
+  groupCode = null;
+  saveGroup();
+  renderPanelBody();
+};
+
+window.createSwapRequest = async function(){
+  if(!onlineReady()){ alert('Devi prima entrare in un gruppo.'); return; }
+  const dateStr = document.getElementById('swapDate')?.value;
+  const shift = document.getElementById('swapShift')?.value.trim();
+  const note = document.getElementById('swapNote')?.value.trim();
+  if(!dateStr){ alert('Scegli il giorno del turno.'); return; }
+  if(!shift){ alert('Indica quale turno (es. P, M, N).'); return; }
+  onlineBusy = true; renderPanelBody();
+  try{
+    const FB = window.FB;
+    await FB.addDoc(FB.collection(FB.db, 'groups', groupCode, 'requests'), {
+      fromUid: authUser.uid,
+      fromName: displayName,
+      date: dateStr,
+      shiftCode: shift.toUpperCase(),
+      note: note || '',
+      status: 'open',
+      takenBy: null,
+      takenByName: null,
+      createdAt: FB.serverTimestamp()
+    });
+  }catch(e){ alert('Invio non riuscito: ' + e.message); }
+  onlineBusy = false;
+  renderPanelBody();
+};
+
+window.acceptSwapRequest = async function(id){
+  if(!onlineReady()) return;
+  if(!confirm('Confermi di prenderti questo turno?')) return;
+  onlineBusy = true; renderPanelBody();
+  try{
+    const FB = window.FB;
+    await FB.updateDoc(FB.doc(FB.db, 'groups', groupCode, 'requests', id), {
+      status: 'taken',
+      takenBy: authUser.uid,
+      takenByName: displayName
+    });
+  }catch(e){ alert('Operazione non riuscita: ' + e.message); }
+  onlineBusy = false;
+  renderPanelBody();
+};
+
+window.cancelSwapRequest = async function(id){
+  if(!onlineReady()) return;
+  if(!confirm('Eliminare questa richiesta?')) return;
+  try{
+    const FB = window.FB;
+    await FB.deleteDoc(FB.doc(FB.db, 'groups', groupCode, 'requests', id));
+  }catch(e){ alert('Eliminazione non riuscita: ' + e.message); }
+  renderPanelBody();
+};
+
+function fmtDateIt(iso){
+  try{
+    const [y,m,d] = iso.split('-').map(Number);
+    return `${d} ${ITALIAN_MONTHS_SHORT[m-1]} ${y}`;
+  }catch(e){ return iso; }
+}
+
+function renderSwapPanel(){
+  if(!window.FB || !window.FB.enabled){
+    return `
+      <h2>Scambio turni</h2>
+      <p style="font-size:0.85rem; color:var(--ink-soft);">
+        La parte online non e' ancora configurata. Serve un progetto Firebase gratuito:
+        una volta creato, incolla i dati nella sezione in cima al file dell'app.
+      </p>`;
+  }
+  if(!authUser || !authUser.uid){
+    return `
+      <h2>Scambio turni</h2>
+      <p style="font-size:0.85rem; color:var(--ink-soft);">
+        Per usare lo scambio turni devi accedere con un account online. Esci e rientra con email e password.
+      </p>`;
+  }
+  if(!groupCode){
+    return `
+      <h2>Scambio turni</h2>
+      <p style="font-size:0.85rem; color:var(--ink-soft);">
+        Entra nel gruppo dei tuoi colleghi con un codice condiviso. Chi lo usa per primo lo crea,
+        gli altri usano lo stesso codice per unirsi.
+      </p>
+      <button class="btn-primary" onclick="joinGroup()">Entra in un gruppo</button>`;
+  }
+
+  const mine = openRequests.filter(r=>r.fromUid === authUser.uid);
+  const others = openRequests.filter(r=>r.fromUid !== authUser.uid);
+
+  const card = (r, isMine)=>`
+    <div class="swap-card ${r.status==='taken'?'taken':''}">
+      <div class="swap-card-head">
+        <span class="swap-shift">${r.shiftCode}</span>
+        <span class="swap-date">${fmtDateIt(r.date)}</span>
+      </div>
+      <div class="swap-meta">${isMine?'la tua richiesta':'da '+(r.fromName||'collega')}</div>
+      ${r.note?`<div class="swap-note">"${r.note}"</div>`:''}
+      ${r.status==='taken'
+        ? `<div class="swap-status">✅ preso da ${r.takenByName||'un collega'}</div>`
+        : (isMine
+            ? `<button class="mini-btn danger" onclick="cancelSwapRequest('${r.id}')">annulla richiesta</button>`
+            : `<button class="btn-primary" style="padding:6px 14px; font-size:0.8rem;" onclick="acceptSwapRequest('${r.id}')">Lo prendo io</button>`)}
+    </div>`;
+
+  return `
+    <h2>Scambio turni</h2>
+    <div class="special-row"><span>Gruppo</span><span>${groupCode}</span></div>
+    <div class="special-row"><span>Il tuo nome</span><span>${displayName}</span></div>
+    <button class="mini-btn" onclick="joinGroup()">cambia gruppo</button>
+    <button class="mini-btn danger" onclick="leaveGroup()">esci dal gruppo</button>
+
+    <div class="section-label">Chiedi che qualcuno prenda un tuo turno</div>
+    <div class="pay-row">
+      <label>Giorno<input type="date" id="swapDate"></label>
+      <label>Turno<input type="text" id="swapShift" placeholder="es. P" maxlength="4"></label>
+    </div>
+    <div class="pay-row">
+      <label>Nota (facoltativa)<input type="text" id="swapNote" placeholder="es. ho una visita"></label>
+    </div>
+    <button class="btn-primary" onclick="createSwapRequest()" ${onlineBusy?'disabled':''}>
+      ${onlineBusy?'Invio...':'Invia richiesta'}
+    </button>
+
+    <div class="section-label">Richieste dei colleghi</div>
+    ${others.length ? others.map(r=>card(r,false)).join('') : `<div class="calendar-note">nessuna richiesta al momento</div>`}
+
+    <div class="section-label">Le tue richieste</div>
+    ${mine.length ? mine.map(r=>card(r,true)).join('') : `<div class="calendar-note">non hai richieste attive</div>`}
+  `;
+}
+
 (async function init(){
   if(!localStorage.getItem(STORAGE_FIRSTUSE_KEY)){
     localStorage.setItem(STORAGE_FIRSTUSE_KEY, new Date().toISOString());
@@ -2026,9 +2339,32 @@ window.getTomorrowShifts = function(){
   migrateLegacyData();
   loadStructures();
   loadCustomColors();
+  loadGroup();
+  if(window.FB_READY) { try{ await window.FB_READY; }catch(e){} }
   await loadSettings();
   await loadMonth(viewY, viewM);
+
+  // se Firebase e' attivo, allinea lo stato all'utente realmente autenticato
+  if(window.FB && window.FB.enabled){
+    window.FB.onAuth((u)=>{
+      if(u){
+        // account online presente: abilita anche lo scambio turni
+        authUser = {email:u.email, uid:u.uid};
+        try{ localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(authUser)); }catch(e){}
+        startRequestsListener();
+      } else {
+        // nessun account online: NON si esce dall'app.
+        // Chi usa l'app solo in locale continua a entrare come prima,
+        // semplicemente senza la parte di scambio turni.
+        if(authUser) authUser = {email: authUser.email};
+        stopRequestsListener();
+      }
+      render();
+    });
+  }
+
   render();
+  startRequestsListener();
 })();
 </script>
 </body>

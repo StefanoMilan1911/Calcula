@@ -309,6 +309,8 @@ body{
   overflow-y:auto;
 }
 .panel{
+  max-width:100%;
+  overflow-x:hidden;
   background:var(--paper-raised);
   border-radius:14px;
   max-width:560px;
@@ -341,9 +343,11 @@ body{
   display:flex;
   gap:12px;
   margin-bottom:10px;
+  flex-wrap:wrap;
 }
 .pay-row label{
-  flex:1;
+  flex:1 1 140px;
+  min-width:0;          /* permette al campo di restringersi invece di sfondare */
   font-size:0.8rem;
   color:var(--ink-soft);
   display:flex;
@@ -351,11 +355,20 @@ body{
   gap:4px;
 }
 .pay-row input{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  box-sizing:border-box;
   border:1px solid var(--line);
   border-radius:8px;
   padding:8px 10px;
   font-family:'IBM Plex Mono', monospace;
   font-size:0.9rem;
+}
+.pay-row input[type=date]{
+  width:100%;
+  max-width:100%;
+  min-width:0;
 }
 .type-row{
   display:grid;

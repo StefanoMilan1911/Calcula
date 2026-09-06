@@ -1620,8 +1620,24 @@ function renderVacationBox(){
     </div>`;
 }
 
-function renderYearChart(){
-  const year = viewY;
+// Anni per cui esistono dati salvati nella struttura attiva.
+function getYearsWithData(){
+  const years = new Set();
+  const prefix = `month:${activeStructureId}:`;
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(k && k.startsWith(prefix)){
+        const y = Number(k.substring(prefix.length).split('-')[0]);
+        if(!isNaN(y)) years.add(y);
+      }
+    }
+  }catch(e){}
+  years.add(viewY);
+  return [...years].sort((a,b)=>b-a);   // dal piu' recente
+}
+
+function renderYearChart(year){
   const data = [];
   for(let m=0;m<12;m++){ data.push(computeMonthStats(year,m)); }
   const netOf = (d)=> (d.net===null||d.net===undefined) ? 0 : Number(d.net);
@@ -1852,23 +1868,52 @@ function renderEarningsPanel(summary){
 }
 
 function renderStatsPanel(){
-  const chartOpen = openEarningsSections.has('yearChart');
-  const y = renderYearChart();
+  const years = getYearsWithData();
+
+  const yearBlocks = years.map(year=>{
+    const openKey = 'year:' + year;
+    // l'anno che si sta guardando nel calendario e' aperto di default
+    const isOpen = openEarningsSections.has(openKey) ||
+                   (year===viewY && !openEarningsSections.has('closed:'+year));
+    if(!isOpen){
+      return `
+        <div class="mult-block">
+          <button type="button" class="mult-header" onclick="toggleYearSection(${year})">
+            <span class="mult-title">${year}</span>
+            <span class="mult-header-right"><span class="chevron">▼</span></span>
+          </button>
+        </div>`;
+    }
+    const y = renderYearChart(year);
+    const chartKey = 'chart:' + year;
+    const chartOpen = openEarningsSections.has(chartKey);
+    return `
+      <div class="mult-block">
+        <button type="button" class="mult-header" onclick="toggleYearSection(${year})">
+          <span class="mult-title">${year}</span>
+          <span class="mult-header-right"><span class="chevron">▲</span></span>
+        </button>
+        <div class="mult-body">
+          ${y.summary}
+          <div class="mult-block" style="margin-top:14px;">
+            <button type="button" class="mult-header" onclick="toggleEarningsSection('${chartKey}')">
+              <span class="mult-title" style="font-size:0.9rem;">Grafico ${year}</span>
+              <span class="mult-header-right"><span class="chevron">${chartOpen?'▲':'▼'}</span></span>
+            </button>
+            ${chartOpen?`<div class="mult-body">${y.chart}</div>`:''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
   return `
-    <h2>Statistiche ${viewY}</h2>
+    <h2>Statistiche</h2>
 
     <div class="section-label">Ferie</div>
     ${renderVacationBox()}
 
-    <div style="margin-top:18px;">${y.summary}</div>
-
-    <div class="mult-block" style="margin-top:18px;">
-      <button type="button" class="mult-header" onclick="toggleEarningsSection('yearChart')">
-        <span class="mult-title">Grafico ${viewY}</span>
-        <span class="mult-header-right"><span class="chevron">${chartOpen?'▲':'▼'}</span></span>
-      </button>
-      ${chartOpen?`<div class="mult-body">${y.chart}</div>`:''}
-    </div>
+    <div class="section-label" style="margin-top:20px;">Anni</div>
+    ${yearBlocks}
   `;
 }
 
@@ -2371,6 +2416,22 @@ window.setMult = async function(cat, field, val){
 
 window.toggleSuggestions = function(key){
   if(openSuggestionKeys.has(key)) openSuggestionKeys.delete(key); else openSuggestionKeys.add(key);
+  renderPanelBody();
+};
+
+window.toggleYearSection = function(year){
+  const openKey = 'year:' + year;
+  const closedKey = 'closed:' + year;
+  const isDefaultOpen = (year === viewY);
+  const isOpen = openEarningsSections.has(openKey) ||
+                 (isDefaultOpen && !openEarningsSections.has(closedKey));
+  if(isOpen){
+    openEarningsSections.delete(openKey);
+    if(isDefaultOpen) openEarningsSections.add(closedKey);
+  } else {
+    openEarningsSections.add(openKey);
+    openEarningsSections.delete(closedKey);
+  }
   renderPanelBody();
 };
 
